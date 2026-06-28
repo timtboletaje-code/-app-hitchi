@@ -10,14 +10,19 @@ const initSqlJs = require('sql.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DATA_PATH = process.env.DATA_PATH || '.';
+const UPLOADS_PATH = path.join(DATA_PATH, 'uploads');
+const DB_PATH = path.join(DATA_PATH, 'hitchi.db');
 let db;
+
+if (!fs.existsSync(UPLOADS_PATH)) fs.mkdirSync(UPLOADS_PATH, { recursive: true });
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(UPLOADS_PATH));
 
-const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => { if (file.mimetype.startsWith('image/')) cb(null, true); else cb(new Error('Solo imágenes')); } });
+const upload = multer({ dest: UPLOADS_PATH + '/', limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => { if (file.mimetype.startsWith('image/')) cb(null, true); else cb(new Error('Solo imágenes')); } });
 
 app.use((req, res, next) => {
   if (req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.html')) {
@@ -30,14 +35,14 @@ const equipos = JSON.parse(fs.readFileSync('equipos.json', 'utf8'));
 const estacionesUnicas = [...new Set(equipos.map(e => e.estacion))].sort();
 const tiposEquipoUnicos = [...new Set(equipos.map(e => e.equipo))].sort();
 
-function saveDB() { const d = db.export(); fs.writeFileSync('hitchi.db', Buffer.from(d)); }
+function saveDB() { const d = db.export(); fs.writeFileSync(DB_PATH, Buffer.from(d)); }
 function query(sql, params = []) { const s = db.prepare(sql); if (params.length) s.bind(params); const r = []; while (s.step()) r.push(s.getAsObject()); s.free(); return r; }
 function run(sql, params = []) { db.run(sql, params); saveDB(); }
 function get(sql, params = []) { const r = query(sql, params); return r.length ? r[0] : null; }
 
 async function start() {
   const SQL = await initSqlJs();
-  db = fs.existsSync('hitchi.db') ? new SQL.Database(fs.readFileSync('hitchi.db')) : new SQL.Database();
+  db = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
   db.run(`CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, correo TEXT UNIQUE NOT NULL, nombre TEXT NOT NULL, rol TEXT DEFAULT 'tecnico')`);
   db.run(`CREATE TABLE IF NOT EXISTS incidencias (folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT, fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT, falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT, descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT, herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, tecnico_correo TEXT, gerente_mantenimiento TEXT, supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', created_at TEXT DEFAULT (datetime('now', '-6 horas')))`);
   db.run(`CREATE TABLE IF NOT EXISTS fotos (id INTEGER PRIMARY KEY AUTOINCREMENT, folio TEXT, url_foto TEXT, tipo TEXT, fecha_toma TEXT DEFAULT (datetime('now', '-6 horas')), FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
