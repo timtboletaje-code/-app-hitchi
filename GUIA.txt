@@ -1,0 +1,230 @@
+====================================================================
+  GUÍA COMPLETA - APP HITCHI
+  Sistema de Reporte de Incidencias de Mantenimiento
+====================================================================
+
+¿QUÉ ES ESTA APP?
+------------------
+Es una página web que corre en tu computadora y los técnicos
+abren desde su celular para capturar reportes con fotos.
+Genera PDF y Excel automáticamente y los envía por correo.
+
+
+====================================================================
+  OPCIÓN A - USAR LA APP DESDE CASA (GRATIS)
+====================================================================
+
+SOLO 3 PASOS:
+
+PASO 1: Enciende la app en tu computadora
+------------------------------------------
+Abre una terminal (Ctrl + Alt + T) y escribe:
+  cd /home/mint/app-hitchi && npm start
+
+Deberías ver:
+  ✅ App Hitchi en http://localhost:3000
+
+(cuando cierres la terminal, la app se apaga)
+
+
+PASO 2: Crea un enlace público con Ngrok
+------------------------------------------
+Abre OTRA terminal y escribe:
+  npx ngrok http 3000
+
+Verás algo como:
+  Forwarding https://abc123.ngrok-free.app -> http://localhost:3000
+
+Esa URL (https://abc123.ngrok-free.app) es tu enlace público.
+Compártela con los técnicos.
+
+
+PASO 3: Los técnicos abren la URL en su celular
+--------------------------------------------------
+Desde cualquier lugar del mundo, con datos celulares o WiFi,
+abren la URL que te dio Ngrok en su navegador (Chrome, Safari).
+Escriben su correo y ya pueden capturar reportes.
+
+
+IMPORTANTE:
+- Tu computadora debe quedarse ENCENDIDA
+- No debe apagar la pantalla/terminal
+- Si se va la luz, se cae la app
+- Cada vez que reinicies Ngrok, la URL cambia (versión gratis)
+
+
+====================================================================
+  OPCIÓN B - SUBIR LA APP A INTERNET 24/7 ($7/mes)
+====================================================================
+
+Esta opción es la profesional: la app queda en internet
+todo el día, todos los días, sin depender de tu PC.
+
+REQUISITOS:
+- Una tarjeta de crédito/débito
+- $7 dólares al mes (aproximadamente $140 MXN)
+- Un correo electrónico
+
+
+PASO 1: Crear cuenta en GitHub (gratis)
+------------------------------------------
+1. Ve a https://github.com
+2. Escribe tu correo
+3. Crea una contraseña (que no olvides)
+4. Elige nombre de usuario (ej: "tecnico_hitchi")
+5. Verifica tu correo
+
+
+PASO 2: Crear un repositorio (como una carpeta en la nube)
+-------------------------------------------------------------
+1. Dentro de GitHub, presiona el botón verde "Create repository"
+2. Ponle nombre: "app-hitchi"
+3. Presiona "Create repository"
+4. En la página que aparece, busca el botón "uploading an existing file"
+5. Arrastra TODOS los archivos de /home/mint/app-hitchi/ a la ventana
+   (NO subas la carpeta node_modules/ ni hitchi.db)
+6. Presiona "Commit changes"
+
+
+PASO 3: Crear cuenta en Render.com
+------------------------------------
+1. Ve a https://render.com
+2. Presiona "Get Started"
+3. Regístrate con tu correo o con el botón "GitHub"
+   (si usas GitHub, será automático)
+4. Verifica tu correo
+
+
+PASO 4: Conectar Render con GitHub
+------------------------------------
+1. En Render.com, presiona "New +" → "Web Service"
+2. Presiona "Connect to GitHub"
+3. Te pedirá autorizar - presiona "Authorize Render"
+4. Busca tu repositorio "app-hitchi" y selecciónalo
+
+
+PASO 5: Configurar el servicio
+--------------------------------
+Llena los campos así:
+
+  Name: app-hitchi
+  Region: Oregon (US) (o la más cercana)
+  Branch: main
+  Runtime: Node
+  Build Command: npm install
+  Start Command: node server.js
+  Plan: Starter ($7/month) ← IMPORTANTE: el plan gratis
+         NO sirve porque pierde los datos al dormirse
+
+Presiona "Advanced" y agrega:
+
+  Variable: PORT = 10000
+  Variable: EMAIL_USER = (tu correo Gmail)
+  Variable: EMAIL_PASS = (tu contraseña de aplicación Gmail)
+
+Presiona "Create Web Service"
+
+
+PASO 6: Agregar disco persistente
+-----------------------------------
+1. En Render.com, ve a tu servicio "app-hitchi"
+2. Presiona "Disks" en el menú izquierdo
+3. Presiona "Add Disk"
+4. Ponle nombre: "data"
+5. Tamaño: 1 GB
+6. Ruta: /data
+7. Presiona "Save"
+
+Luego ve a "Environment" y agrega:
+  Variable: DISK_PATH = /data
+
+ESTO ES CRÍTICO - el disco evita que se pierdan los datos
+cuando la app se reinicia.
+
+
+PASO 7: ¡Listo!
+-----------------
+Render construye y despliega tu app. Después de 2-3 minutos,
+verás una URL tipo:
+  https://app-hitchi.onrender.com
+
+Esa es la URL para toda la vida. Compártela con los técnicos.
+
+
+====================================================================
+  CÓMO USAR LA APP (para los técnicos)
+====================================================================
+
+1. Abren la URL en su celular (Chrome o Safari)
+2. Escriben su correo y nombre
+3. Presionan "+ Nueva" para crear un reporte
+4. Seleccionan ESTACIÓN → EQUIPO → LOCATION ID (todo con botones)
+5. Llenan los datos del fallo y la corrección
+6. Presionan "CREAR INCIDENCIA"
+7. Toman 2 fotos ANTES y 2 fotos DESPUÉS
+8. Presionan "ENVIAR REPORTE"
+9. El PDF se envía automáticamente a:
+   - timtboletaje@gmail.com
+   - marianozar.c@gmail.com (CC)
+
+
+====================================================================
+  CÓMO VER LOS DATOS GUARDADOS
+====================================================================
+
+Los datos se guardan en:
+  hitchi.db  (dentro de la carpeta app-hitchi)
+
+Para descargar un reporte individual:
+  Abrir la incidencia → presionar "DESCARGAR PDF" o "DESCARGAR EXCEL"
+
+Para ver todo en Excel:
+  No hay una opción directa aún (se puede agregar)
+
+
+====================================================================
+  CONFIGURAR EL CORREO (Gmail)
+====================================================================
+
+Para que la app pueda enviar correos necesitas:
+
+1. Activar "Verificación en 2 pasos" en tu cuenta de Google
+   https://myaccount.google.com/security
+
+2. Crear una "Contraseña de aplicación":
+   - Ve a: https://myaccount.google.com/apppasswords
+   - Selecciona "Otra (nombre personalizado)"
+   - Ponle: "App Hitchi"
+   - Copia la contraseña que te dan (16 letras)
+
+3. Usa esa contraseña en:
+   EMAIL_USER = tu-correo@gmail.com
+   EMAIL_PASS = la-contraseña-de-16-letras
+
+
+====================================================================
+  PREGUNTAS FRECUENTES
+====================================================================
+
+¿Los técnicos necesitan instalar algo en su celular?
+  NO. Solo el navegador (Chrome, Safari, Edge).
+
+¿Cuántos técnicos pueden usar la app?
+  Ilimitados. Cada uno inicia sesión con su correo.
+
+¿Qué pasa si no hay internet?
+  La app requiere internet. Sin datos no funciona.
+
+¿Las fotos se guardan para siempre?
+  Sí, mientras no borres la base de datos o los archivos.
+
+¿Puedo usar la app en mi celular también?
+  Sí, abre la misma URL que los técnicos.
+
+¿Pierdo datos si se reinicia el servidor?
+  Con Render plan Starter + Disk: NO, los datos persisten.
+  Con Ngrok desde tu PC: los datos están en tu PC, no se pierden.
+
+¿Qué hago si tengo dudas?
+  Pregúntame directamente en esta conversación.
+====================================================================
