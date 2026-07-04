@@ -216,11 +216,11 @@ function renderForm(data) {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Fecha Llegada</label><input type="date" id="f_f_llegada" value="${data?.f_llegada||today}"></div>
-          <div class="form-group"><label>Hora Llegada</label><input type="time" id="f_h_llegada" value="${data?.h_llegada||''}"></div>
+          <div class="form-group"><label>Hora Llegada</label><input type="time" id="f_h_llegada" value="${data?.h_llegada||now}"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Fecha Cierre</label><input type="date" id="f_fecha_cierre" value="${data?.fecha_cierre||''}"></div>
-          <div class="form-group"><label>Hora Cierre</label><input type="time" id="f_hora_cierre" value="${data?.hora_cierre||''}"></div>
+          <div class="form-group"><label>Fecha Cierre</label><input type="date" id="f_fecha_cierre" value="${data?.fecha_cierre||today}"></div>
+          <div class="form-group"><label>Hora Cierre</label><input type="time" id="f_hora_cierre" value="${data?.hora_cierre||now}"></div>
         </div>
       </div>
 
@@ -593,8 +593,13 @@ async function saveForm(isEdit) {
       // Validate required fields
       if (!loc_id) { alert('❌ Selecciona un Location ID'); return; }
       const required = [
+        { id: 'f_f_reporte', label: 'Fecha de Reporte' },
+        { id: 'f_h_reporte', label: 'Hora de Reporte' },
+        { id: 'f_f_llegada', label: 'Fecha de Llegada' },
         { id: 'f_h_llegada', label: 'Hora de Llegada' },
+        { id: 'f_fecha_cierre', label: 'Fecha de Cierre' },
         { id: 'f_hora_cierre', label: 'Hora de Cierre' },
+        { id: 'f_falla_fecha', label: 'Fecha de la Falla' },
         { id: 'f_como_identificado', label: '¿Cómo fue identificado el fallo?' },
         { id: 'f_causa_raiz', label: 'Causa Raíz del Fallo' },
         { id: 'f_metodo_diagnostico', label: 'Método de Diagnóstico' },
