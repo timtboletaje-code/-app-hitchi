@@ -103,6 +103,12 @@ app.get('/api/tipos-equipo', (req, res) => res.json(tiposEquipoUnicos));
 app.get('/api/tecnicos', (req, res) => {
   res.json(query('SELECT DISTINCT nombre FROM usuarios WHERE rol = ? ORDER BY nombre', ['tecnico']));
 });
+app.get('/api/equipos-por-estacion', (req, res) => {
+  const est = req.query.estacion;
+  if (!est) return res.json(tiposEquipoUnicos);
+  const filtrados = [...new Set(equipos.filter(e => e.estacion === est).map(e => e.equipo))].sort();
+  res.json(filtrados);
+});
 app.get('/api/locations', (req, res) => {
   let r = equipos;
   if (req.query.estacion) r = r.filter(e => e.estacion === req.query.estacion);

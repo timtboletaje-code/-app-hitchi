@@ -325,13 +325,12 @@ function renderForm(data) {
   });
 
   const equipGrid = $('equipo-grid');
-  tiposCache.forEach(e => {
-    const btn = document.createElement('button');
-    btn.className = `selector-btn ${e === selectedEquipo ? 'selected' : ''}`;
-    btn.textContent = e;
-    btn.onclick = () => selectEquipo(e, isEdit);
-    equipGrid.appendChild(btn);
-  });
+  if (selectedEstacion) {
+    // Will be populated by selectEstacion on render, or fetch now if editing
+    loadEquiposPorEstacion(selectedEstacion, selectedEquipo, isEdit);
+  } else {
+    equipGrid.innerHTML = '<div style="grid-column:1/-1;color:#999;font-size:12px;padding:8px">Selecciona una estación primero</div>';
+  }
 
   if (selectedEstacion && selectedEquipo) {
     loadLocSelectors(selectedEstacion, selectedEquipo, selectedLoc, isEdit);
@@ -347,17 +346,30 @@ function renderForm(data) {
   $('btn-save').onclick = () => saveForm(isEdit);
 }
 
+async function loadEquiposPorEstacion(estacion, selectedEquipo, isEdit) {
+  const eqGrid = $('equipo-grid');
+  eqGrid.innerHTML = '<div class="loading" style="padding:8px;grid-column:1/-1">Cargando...</div>';
+  try {
+    const res = await fetch(`${API}/api/equipos-por-estacion?estacion=${encodeURIComponent(estacion)}`);
+    const tipos = await res.json();
+    eqGrid.innerHTML = '';
+    tipos.forEach(e => {
+      const btn = document.createElement('button');
+      btn.className = `selector-btn ${e === selectedEquipo ? 'selected' : ''}`;
+      btn.textContent = e;
+      btn.onclick = () => selectEquipo(e, isEdit);
+      eqGrid.appendChild(btn);
+    });
+  } catch(e) {
+    eqGrid.innerHTML = '<div style="grid-column:1/-1;color:#c62828;font-size:12px;padding:8px">Error al cargar equipos</div>';
+  }
+}
+
 function selectEstacion(est, isEdit) {
   document.querySelectorAll('#estacion-grid .selector-btn').forEach(b => b.classList.toggle('selected', b.textContent === est));
   document.querySelectorAll('#equipo-grid .selector-btn').forEach(b => b.classList.remove('selected'));
   $('loc-grid').innerHTML = '<div style="grid-column:1/-1;color:#999;font-size:12px;padding:8px">Selecciona equipo</div>';
-  tiposCache.forEach(e => {
-    const btn = document.createElement('button');
-    btn.className = 'selector-btn';
-    btn.textContent = e;
-    btn.onclick = () => selectEquipo(e, isEdit);
-    $('equipo-grid').appendChild(btn);
-  });
+  loadEquiposPorEstacion(est, '', isEdit);
 }
 
 function selectEquipo(equipo, isEdit) {
@@ -556,6 +568,32 @@ async function saveForm(isEdit) {
 
   try {
     if (isEdit) {
+      // Validate required fields
+      if (!loc_id) { alert('❌ Selecciona un Location ID'); return; }
+      const required = [
+        { id: 'f_h_llegada', label: 'Hora de Llegada' },
+        { id: 'f_hora_cierre', label: 'Hora de Cierre' },
+        { id: 'f_como_identificado', label: '¿Cómo fue identificado el fallo?' },
+        { id: 'f_causa_raiz', label: 'Causa Raíz del Fallo' },
+        { id: 'f_metodo_diagnostico', label: 'Método de Diagnóstico' },
+        { id: 'f_desc_correccion', label: 'Descripción de la Corrección' },
+        { id: 'f_tipo_pruebas', label: 'Tipo de Pruebas Realizadas' },
+        { id: 'f_estado_equipo', label: 'Estado en que se deja el equipo' },
+        { id: 'f_acciones', label: 'Acciones Preventivas' },
+        { id: 'f_herramienta', label: 'Herramienta / Material' },
+        { id: 'f_refacciones', label: 'Refacciones' },
+        { id: 'f_gerente', label: 'Gerente de Mantenimiento' },
+        { id: 'f_supervisor', label: 'Supervisor UO TIMT' },
+      ];
+      for (const f of required) {
+        const el = $(f.id);
+        if (!el || !el.value.trim()) {
+          alert(`❌ El campo "${f.label}" es obligatorio`);
+          el?.focus();
+          return;
+        }
+      }
+
       // Validate photos: min 2 antes, max 4 antes; min 2 despues, max 4 despues
       const fotos = currentFotos.length ? currentFotos : [];
       const antesCount = fotos.filter(f => f.tipo === 'antes').length;
