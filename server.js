@@ -334,13 +334,12 @@ async function generarExcel(folio) {
   ws.getRow(r).height = 18;
   r++;
 
-  // REPORTE FOTOGRÁFICO - fixed area
+  // REPORTE FOTOGRÁFICO - 2x2 grid per side, fixed 140px
   sectionHeader('REPORTE FOTOGRÁFICO');
   const antes = fotos.filter(f => f.tipo === 'antes');
   const despues = fotos.filter(f => f.tipo === 'despues');
-  const maxRows = Math.max(Math.ceil(antes.length / 2), Math.ceil(despues.length / 2), 1);
-  const photoSectionRows = 10;
-  const photoRowHeight = Math.floor(140 / maxRows);
+  const rowH = 70;
+  const cellH = 70;
 
   function colLetter(n) {
     let s = '';
@@ -348,45 +347,43 @@ async function generarExcel(folio) {
     return s || 'A';
   }
 
-  for (let row = 0; row < maxRows; row++) {
-    const rowSpan = Math.floor(photoSectionRows / maxRows);
-    for (let c2 = 0; c2 < 2; c2++) {
-      const idx = row * 2 + c2;
-      const col = 3 + c2 * 2;
-      if (idx < antes.length) {
-        const fp = path.join(__dirname, antes[idx].url_foto);
-        if (fs.existsSync(fp)) {
-          try {
-            const img = wb.addImage({ filename: fp, extension: 'png' });
-            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + rowSpan - 1}`);
-          } catch(e) {}
-        }
+  for (let i = 0; i < 4; i++) {
+    const row = Math.floor(i / 2);
+    const col = 3 + (i % 2) * 2;
+    const rr = r + row;
+    if (i < antes.length) {
+      const fp = path.join(__dirname, antes[i].url_foto);
+      if (fs.existsSync(fp)) {
+        try {
+          const img = wb.addImage({ filename: fp, extension: 'png' });
+          ws.addImage(img, `${colLetter(col)}${rr}:${colLetter(col + 1)}${rr}`);
+        } catch(e) {}
       }
-      ws.mergeCells(r, col, r, col + 1);
-      c(r, col, idx < antes.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
-      addBorder(r, col, col + 1);
     }
-    for (let c2 = 0; c2 < 2; c2++) {
-      const idx = row * 2 + c2;
-      const col = 9 + c2 * 2;
-      if (idx < despues.length) {
-        const fp = path.join(__dirname, despues[idx].url_foto);
-        if (fs.existsSync(fp)) {
-          try {
-            const img = wb.addImage({ filename: fp, extension: 'png' });
-            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + rowSpan - 1}`);
-          } catch(e) {}
-        }
-      }
-      ws.mergeCells(r, col, r, col + 1);
-      c(r, col, idx < despues.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
-      addBorder(r, col, col + 1);
-    }
-    ws.getRow(r).height = Math.floor(140 / maxRows);
-    for (let cc = 3; cc <= 12; cc++) { addBorder(r, cc, cc); }
-    for (let rr = r + 1; rr <= r + rowSpan - 1; rr++) { for (let cc = 3; cc <= 12; cc++) addBorder(rr, cc, cc); }
-    r += rowSpan;
+    ws.mergeCells(rr, col, rr, col + 1);
+    c(rr, col, i < antes.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
+    addBorder(rr, col, col + 1);
+    ws.getRow(rr).height = rowH;
   }
+  for (let i = 0; i < 4; i++) {
+    const row = Math.floor(i / 2);
+    const col = 9 + (i % 2) * 2;
+    const rr = r + row;
+    if (i < despues.length) {
+      const fp = path.join(__dirname, despues[i].url_foto);
+      if (fs.existsSync(fp)) {
+        try {
+          const img = wb.addImage({ filename: fp, extension: 'png' });
+          ws.addImage(img, `${colLetter(col)}${rr}:${colLetter(col + 1)}${rr}`);
+        } catch(e) {}
+      }
+    }
+    ws.mergeCells(rr, col, rr, col + 1);
+    c(rr, col, i < despues.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
+    addBorder(rr, col, col + 1);
+    ws.getRow(rr).height = rowH;
+  }
+  r += 2;
 
   // SIGNATURES
   const sigs = [
@@ -535,43 +532,41 @@ function generarPDF(folio) {
     doc.fill('#555').fontSize(5.5).font('Helvetica-Bold').text('Refacciones', M + 2, y + 1);
     doc.fill('#000').fontSize(6.5).font('Helvetica').text(i.refacciones || '', M + 2, y + 9, { width: W - 4 }); y += 18;
 
-    // REPORTE FOTOGRÁFICO - fixed area, matches V1 cell size
+    // REPORTE FOTOGRÁFICO - 2x2 grid per side, 140px fixed height
     const antesF = fotos.filter(f => f.tipo === 'antes');
     const despuesF = fotos.filter(f => f.tipo === 'despues');
-    const totalRows = Math.max(Math.ceil(antesF.length / 2), Math.ceil(despuesF.length / 2), 1);
     const photoSectionH = 140;
-    const cellH = photoSectionH / totalRows;
+    const cellH = photoSectionH / 2;
     const halfW = (W - 8) / 2;
     const cellW = (halfW - 4) / 2;
 
     drawSectionTitle('REPORTE FOTOGRÁFICO', y); y += 16;
 
-    // Column headers
     doc.fill('#CC0000').fontSize(7).font('Helvetica-Bold').text('ANTES', M + 2, y);
     doc.fill('#2e7d32').fontSize(7).font('Helvetica-Bold').text('DESPUÉS', M + halfW + 10, y);
     y += 10;
 
-    for (let row = 0; row < totalRows; row++) {
-      for (let c2 = 0; c2 < 2; c2++) {
-        const idx = row * 2 + c2;
-        const px = M + c2 * (cellW + 4);
-        const py = y + row * cellH;
-        if (idx < antesF.length) {
-          const fp = path.join(__dirname, antesF[idx].url_foto);
-          if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
-        }
-        doc.rect(px, py, cellW, cellH).stroke('#cccccc');
+    for (let i = 0; i < 4; i++) {
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const px = M + col * (cellW + 4);
+      const py = y + row * cellH;
+      if (i < antesF.length) {
+        const fp = path.join(__dirname, antesF[i].url_foto);
+        if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
       }
-      for (let c2 = 0; c2 < 2; c2++) {
-        const idx = row * 2 + c2;
-        const px = M + halfW + 10 + c2 * (cellW + 4);
-        const py = y + row * cellH;
-        if (idx < despuesF.length) {
-          const fp = path.join(__dirname, despuesF[idx].url_foto);
-          if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
-        }
-        doc.rect(px, py, cellW, cellH).stroke('#cccccc');
+      doc.rect(px, py, cellW, cellH).stroke('#cccccc');
+    }
+    for (let i = 0; i < 4; i++) {
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const px = M + halfW + 10 + col * (cellW + 4);
+      const py = y + row * cellH;
+      if (i < despuesF.length) {
+        const fp = path.join(__dirname, despuesF[i].url_foto);
+        if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
       }
+      doc.rect(px, py, cellW, cellH).stroke('#cccccc');
     }
     y += photoSectionH + 3;
 
