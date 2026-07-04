@@ -3,6 +3,7 @@ let user = JSON.parse(localStorage.getItem('hitchi_user') || 'null');
 let currentFolio = null;
 let estacionesCache = [];
 let tiposCache = [];
+let tecnicosCache = [];
 
 function $(id) { return document.getElementById(id); }
 function render(html) { document.getElementById('app').innerHTML = html; }
@@ -14,23 +15,64 @@ function showLogin() {
       <div style="font-size:48px;margin-bottom:8px">🔧</div>
       <h2>APP HITCHI</h2>
       <p class="subtitle">Registro de incidencias de mantenimiento</p>
-      <input type="email" id="email-input" placeholder="Correo electrónico" value="${user?.correo||''}">
-      <input type="text" id="name-input" placeholder="Nombre del técnico" value="${user?.nombre||''}">
+      <input type="text" id="name-input" placeholder="Nombre del técnico" value="${user?.nombre||''}" autocomplete="off">
       <button class="btn-primary" id="btn-login">ENTRAR</button>
       <div id="login-error" class="error-msg" style="display:none;margin-top:8px"></div>
+      <div style="margin-top:32px;font-size:12px;color:#555">
+        <a href="#" id="link-admin" style="color:#888;text-decoration:none">Acceso Admin</a>
+      </div>
     </div>
   `);
   $('btn-login').onclick = doLogin;
-  $('email-input').onkeydown = e => { if (e.key==='Enter') doLogin(); };
+  $('name-input').onkeydown = e => { if (e.key==='Enter') doLogin(); };
+  $('link-admin').onclick = e => { e.preventDefault(); showAdminLogin(); };
+}
+
+function showAdminLogin() {
+  render(`
+    <div class="login-screen">
+      <div style="font-size:48px;margin-bottom:8px">🔐</div>
+      <h2>ADMIN HITCHI</h2>
+      <p class="subtitle">Supervisión de reportes</p>
+      <input type="text" id="admin-name-input" placeholder="Nombre" autocomplete="off">
+      <input type="password" id="admin-pass-input" placeholder="Contraseña">
+      <button class="btn-primary" id="btn-admin-login">ENTRAR COMO ADMIN</button>
+      <div id="login-error" class="error-msg" style="display:none;margin-top:8px"></div>
+      <div style="margin-top:16px;font-size:12px;color:#555">
+        <a href="#" id="link-back" style="color:#888;text-decoration:none">← Volver</a>
+      </div>
+    </div>
+  `);
+  $('btn-admin-login').onclick = doAdminLogin;
+  $('admin-pass-input').onkeydown = e => { if (e.key==='Enter') doAdminLogin(); };
+  $('link-back').onclick = e => { e.preventDefault(); showLogin(); };
 }
 
 async function doLogin() {
-  const correo = $('email-input').value.trim();
   const nombre = $('name-input').value.trim();
   const errEl = $('login-error');
-  if (!correo) { errEl.textContent='Ingresa tu correo'; errEl.style.display='block'; return; }
+  if (!nombre) { errEl.textContent='Ingresa tu nombre'; errEl.style.display='block'; return; }
   try {
-    const res = await fetch(`${API}/api/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({correo, nombre}) });
+    const res = await fetch(`${API}/api/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre}) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    user = data;
+    localStorage.setItem('hitchi_user', JSON.stringify(user));
+    loadCaches();
+    showDashboard();
+  } catch(e) {
+    errEl.textContent='Error: '+e.message; errEl.style.display='block';
+  }
+}
+
+async function doAdminLogin() {
+  const nombre = $('admin-name-input').value.trim();
+  const password = $('admin-pass-input').value;
+  const errEl = $('login-error');
+  if (!nombre) { errEl.textContent='Ingresa tu nombre'; errEl.style.display='block'; return; }
+  if (!password) { errEl.textContent='Ingresa la contraseña'; errEl.style.display='block'; return; }
+  try {
+    const res = await fetch(`${API}/api/login-admin`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, password}) });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     user = data;
@@ -44,45 +86,73 @@ async function doLogin() {
 
 async function loadCaches() {
   try {
-    const [eRes, tRes] = await Promise.all([
+    const [eRes, tRes, tecRes] = await Promise.all([
       fetch(`${API}/api/estaciones`),
-      fetch(`${API}/api/tipos-equipo`)
+      fetch(`${API}/api/tipos-equipo`),
+      fetch(`${API}/api/tecnicos`)
     ]);
     estacionesCache = await eRes.json();
     tiposCache = await tRes.json();
+    tecnicosCache = await tecRes.json();
   } catch(e) { console.error(e); }
 }
 
 // --- DASHBOARD ---
 async function showDashboard() {
+  const isAdmin = user?.rol === 'admin';
   render(`
     <div class="header">
-      <h1>APP HITCHI</h1>
+      <h1>${isAdmin ? 'ADMIN' : 'APP HITCHI'}</h1>
       <span class="user-badge">${user?.nombre||''}</span>
       <button class="btn-logout" id="btn-logout">Salir</button>
     </div>
-    <div style="display:flex;gap:6px;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd">
-      <select id="filtro-estacion" style="flex:1;padding:8px;border:2px solid #ddd;border-radius:6px;font-size:13px">
-        <option value="">Todas las estaciones</option>
-        ${estacionesCache.map(e => `<option value="${e}">${e}</option>`).join('')}
-      </select>
-      <button class="btn-new" onclick="showForm()" style="white-space:nowrap">+ Nueva</button>
-      <a href="/api/excel-completo" target="_blank" class="btn-secondary" style="white-space:nowrap;padding:8px 10px;background:#555;color:#fff;text-decoration:none;border-radius:6px;font-size:12px;display:inline-flex;align-items:center">📊 Excel</a>
+    <div class="filtros" style="padding:8px 12px;background:#fff;border-bottom:1px solid #ddd">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${isAdmin ? `
+        <select id="filtro-tecnico" style="flex:1;min-width:100px;padding:7px;border:2px solid #ddd;border-radius:6px;font-size:12px">
+          <option value="">Todos los técnicos</option>
+          ${tecnicosCache.map(t => `<option value="${t.nombre}">${t.nombre}</option>`).join('')}
+        </select>
+        ` : ''}
+        <select id="filtro-estacion" style="flex:1;min-width:100px;padding:7px;border:2px solid #ddd;border-radius:6px;font-size:12px">
+          <option value="">Todas las estaciones</option>
+          ${estacionesCache.map(e => `<option value="${e}">${e}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input type="date" id="filtro-fecha-d" style="flex:1;padding:7px;border:2px solid #ddd;border-radius:6px;font-size:12px">
+        <input type="date" id="filtro-fecha-h" style="flex:1;padding:7px;border:2px solid #ddd;border-radius:6px;font-size:12px">
+        <button class="btn-new" onclick="showForm()" style="padding:7px 14px;white-space:nowrap;font-size:12px">+</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <a href="/api/excel-completo" target="_blank" class="btn-secondary" style="flex:1;text-align:center;text-decoration:none;padding:7px;border-radius:6px;font-size:11px;background:#555;color:#fff">📊 Excel completo</a>
+      </div>
     </div>
     <div class="dashboard" id="dashboard-content">
       <div class="loading">Cargando...</div>
     </div>
   `);
   $('btn-logout').onclick = () => { user=null; localStorage.removeItem('hitchi_user'); showLogin(); };
-  $('filtro-estacion').onchange = loadIncidencias;
+  const filtros = ['filtro-tecnico','filtro-estacion','filtro-fecha-d','filtro-fecha-h'];
+  filtros.forEach(id => { const el = $(id); if (el) el.onchange = loadIncidencias; });
   await loadIncidencias();
 }
 
 async function loadIncidencias() {
   try {
-    const est = $('filtro-estacion')?.value || '';
-    const url = `${API}/api/incidencias${est ? '?estacion='+encodeURIComponent(est) : ''}`;
-    const res = await fetch(url);
+    const isAdmin = user?.rol === 'admin';
+    const params = new URLSearchParams();
+    const tecnico = $('filtro-tecnico')?.value;
+    const estacion = $('filtro-estacion')?.value;
+    const fechaD = $('filtro-fecha-d')?.value;
+    const fechaH = $('filtro-fecha-h')?.value;
+    if (!isAdmin) params.set('tecnico', user?.nombre || '');
+    if (tecnico) params.set('tecnico', tecnico);
+    if (estacion) params.set('estacion', estacion);
+    if (fechaD) params.set('fecha_desde', fechaD);
+    if (fechaH) params.set('fecha_hasta', fechaH);
+    const qs = params.toString();
+    const res = await fetch(`${API}/api/incidencias${qs ? '?'+qs : ''}`);
     const data = await res.json();
     const container = $('dashboard-content');
     if (!container) return;
@@ -102,8 +172,9 @@ async function loadIncidencias() {
 }
 
 function cardHTML(i) {
+  const revisadoBadge = i.revisado == 1 ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32;margin-left:6px">✓ Revisado</span>' : '';
   return `<div class="incidencia-card" onclick="showDetail('${i.folio}')">
-    <div class="folio">${i.folio}</div>
+    <div class="folio">${i.folio} ${revisadoBadge}</div>
     <div class="ubicacion">${i.estacion || ''} ${i.equipo ? '· '+i.equipo : ''} ${i.loc_id ? '('+i.loc_id+')' : ''}</div>
     <div class="meta">${i.f_reporte||''} ${i.tecnico_asignado ? '· '+i.tecnico_asignado : ''}</div>
   </div>`;
@@ -128,17 +199,15 @@ function renderForm(data) {
   let selectedEquipo = data?.equipo || '';
   let selectedLoc = data?.loc_id || '';
 
-  const locs = (selectedEstacion && selectedEquipo) ? [] : [];
-
   render(`
     <div class="header">
       <button class="btn-back" onclick="showDashboard()">←</button>
       <h1>${isEdit ? 'EDITAR' : 'NUEVA'} INCIDENCIA</h1>
+      ${isEdit && user?.rol === 'admin' ? '<button class="btn-logout" onclick="showDashboard()">Cerrar</button>' : ''}
     </div>
     <div class="form-screen">
       ${isEdit ? `<div style="font-weight:700;color:#CC0000;margin-bottom:8px">Folio: ${data.folio}</div>` : ''}
 
-      <!-- SECCIÓN: Fechas -->
       <div class="form-section">
         <div class="form-section-title">📅 Fechas y Horarios</div>
         <div class="form-row">
@@ -155,7 +224,6 @@ function renderForm(data) {
         </div>
       </div>
 
-      <!-- SECCIÓN: Ubicación -->
       <div class="form-section">
         <div class="form-section-title">📍 Ubicación del Equipo</div>
         <div class="form-group"><label>Estación</label></div>
@@ -167,7 +235,6 @@ function renderForm(data) {
         <div class="form-group"><label>Folio (editable)</label><input id="f_folio" value="${data?.folio||''}" placeholder="Auto-generado si se deja vacío"></div>
       </div>
 
-      <!-- SECCIÓN: Falla -->
       <div class="form-section">
         <div class="form-section-title">⚠️ Datos de la Falla</div>
         <div class="form-group"><label>Fecha de la Falla</label><input type="date" id="f_falla_fecha" value="${data?.falla_fecha_reporte||today}"></div>
@@ -190,7 +257,6 @@ function renderForm(data) {
         </div>
       </div>
 
-      <!-- SECCIÓN: Corrección -->
       <div class="form-section">
         <div class="form-section-title">🔧 Corrección</div>
         <div class="form-group"><label>Descripción de la Corrección</label><textarea id="f_desc_correccion" placeholder="Describe la corrección realizada...">${data?.descripcion_correccion||''}</textarea></div>
@@ -212,7 +278,6 @@ function renderForm(data) {
         </div>
       </div>
 
-      <!-- SECCIÓN: Preventivo -->
       <div class="form-section">
         <div class="form-section-title">🛡️ Acciones Preventivas</div>
         <div class="form-group"><label>Acciones Preventivas</label><textarea id="f_acciones" placeholder="Acciones preventivas realizadas...">${data?.acciones_preventivas||''}</textarea></div>
@@ -220,7 +285,6 @@ function renderForm(data) {
         <div class="form-group"><label>Refacciones</label><textarea id="f_refacciones" placeholder="Refacciones utilizadas...">${data?.refacciones||''}</textarea></div>
       </div>
 
-      <!-- SECCIÓN: Responsables -->
       <div class="form-section">
         <div class="form-section-title">👤 Responsables</div>
         <div class="form-group"><label>Técnico Asignado</label><input id="f_tecnico" value="${data?.tecnico_asignado||user?.nombre||''}"></div>
@@ -228,17 +292,18 @@ function renderForm(data) {
         <div class="form-group"><label>Supervisor UO TIMT</label><input id="f_supervisor" value="${data?.supervisor_uo_timt||''}"></div>
       </div>
 
-      <!-- SECCIÓN: Fotos -->
       ${isEdit ? `
       <div class="form-section">
         <div class="form-section-title">📸 Fotografías</div>
         <div class="photo-section">
-          <div class="photo-section-title">🔴 ANTES (obligatorio: 2 fotos)</div>
+          <div class="photo-section-title">🔴 ANTES (mín 2, máx 4)</div>
           <div class="photo-grid" id="antes-grid"></div>
+          <div class="photo-counter" id="antes-counter" style="font-size:11px;color:#888;margin-top:4px"></div>
         </div>
         <div class="photo-section">
-          <div class="photo-section-title" style="color:#2e7d32">🟢 DESPUÉS (obligatorio: 2 fotos)</div>
+          <div class="photo-section-title" style="color:#2e7d32">🟢 DESPUÉS (mín 2, máx 4)</div>
           <div class="photo-grid" id="despues-grid"></div>
+          <div class="photo-counter" id="despues-counter" style="font-size:11px;color:#888;margin-top:4px"></div>
         </div>
       </div>
       ` : ''}
@@ -250,7 +315,6 @@ function renderForm(data) {
     </div>
   `);
 
-  // Build station selector
   const estGrid = $('estacion-grid');
   estacionesCache.forEach(e => {
     const btn = document.createElement('button');
@@ -260,12 +324,8 @@ function renderForm(data) {
     estGrid.appendChild(btn);
   });
 
-  // Build equipo selector (filtered by station if selected, or all)
   const equipGrid = $('equipo-grid');
-  const equiposFiltrados = selectedEstacion
-    ? tiposCache
-    : tiposCache;
-  equiposFiltrados.forEach(e => {
+  tiposCache.forEach(e => {
     const btn = document.createElement('button');
     btn.className = `selector-btn ${e === selectedEquipo ? 'selected' : ''}`;
     btn.textContent = e;
@@ -273,7 +333,6 @@ function renderForm(data) {
     equipGrid.appendChild(btn);
   });
 
-  // Build loc selector if both selected
   if (selectedEstacion && selectedEquipo) {
     loadLocSelectors(selectedEstacion, selectedEquipo, selectedLoc, isEdit);
   } else {
@@ -292,27 +351,12 @@ function selectEstacion(est, isEdit) {
   document.querySelectorAll('#estacion-grid .selector-btn').forEach(b => b.classList.toggle('selected', b.textContent === est));
   document.querySelectorAll('#equipo-grid .selector-btn').forEach(b => b.classList.remove('selected'));
   $('loc-grid').innerHTML = '<div style="grid-column:1/-1;color:#999;font-size:12px;padding:8px">Selecciona equipo</div>';
-  // Reload equipo buttons with filtered list
-  const eqGrid = $('equipo-grid');
-  eqGrid.innerHTML = '';
-  fetch(`${API}/api/locations?estacion=${encodeURIComponent(est)}`)
-    .then(r => r.json())
-    .then(() => {
-      // Get equipos for this station from our local data or via API
-      // Actually, let's just filter types - better approach: get distinct equipos for this station
-      fetch(`${API}/api/locations?estacion=${encodeURIComponent(est)}`)
-        .then(r => r.json())
-        .catch(() => []);
-    })
-    .catch(() => {});
-
-  // Simple: show all types but highlight those available
   tiposCache.forEach(e => {
     const btn = document.createElement('button');
     btn.className = 'selector-btn';
     btn.textContent = e;
     btn.onclick = () => selectEquipo(e, isEdit);
-    eqGrid.appendChild(btn);
+    $('equipo-grid').appendChild(btn);
   });
 }
 
@@ -354,7 +398,7 @@ function renderPhotos(fotos) {
 
   const antesGrid = $('antes-grid');
   antesGrid.innerHTML = '';
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 4; i++) {
     const f = antes[i];
     const slot = document.createElement('div');
     slot.className = `photo-slot ${f ? 'has-photo' : ''}`;
@@ -371,7 +415,7 @@ function renderPhotos(fotos) {
 
   const despuesGrid = $('despues-grid');
   despuesGrid.innerHTML = '';
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 4; i++) {
     const f = despues[i];
     const slot = document.createElement('div');
     slot.className = `photo-slot ${f ? 'has-photo' : ''}`;
@@ -385,6 +429,12 @@ function renderPhotos(fotos) {
     }
     despuesGrid.appendChild(slot);
   }
+
+  // Update counters
+  const ac = $('antes-counter');
+  if (ac) ac.textContent = `${antes.length}/4 fotos (mín 2)`;
+  const dc = $('despues-counter');
+  if (dc) dc.textContent = `${despues.length}/4 fotos (mín 2)`;
 }
 
 let photoTipo = 'antes';
@@ -506,19 +556,18 @@ async function saveForm(isEdit) {
 
   try {
     if (isEdit) {
-      // Validate 4 photos required
+      // Validate photos: min 2 antes, max 4 antes; min 2 despues, max 4 despues
       const fotos = currentFotos.length ? currentFotos : [];
-      const antes = fotos.filter(f => f.tipo === 'antes').length;
-      const despues = fotos.filter(f => f.tipo === 'despues').length;
-      if (antes < 2 || despues < 2) {
-        alert(`❌ Se requieren 2 fotos ANTES y 2 fotos DESPUÉS.\nActual: ${antes} antes, ${despues} después`);
-        return;
-      }
+      const antesCount = fotos.filter(f => f.tipo === 'antes').length;
+      const despuesCount = fotos.filter(f => f.tipo === 'despues').length;
+      if (antesCount < 2) { alert(`❌ Se requieren mínimo 2 fotos ANTES. Actual: ${antesCount}`); return; }
+      if (antesCount > 4) { alert(`❌ Máximo 4 fotos ANTES. Actual: ${antesCount}`); return; }
+      if (despuesCount < 2) { alert(`❌ Se requieren mínimo 2 fotos DESPUÉS. Actual: ${despuesCount}`); return; }
+      if (despuesCount > 4) { alert(`❌ Máximo 4 fotos DESPUÉS. Actual: ${despuesCount}`); return; }
 
       body.estado = 'ENVIADO';
       await fetch(`${API}/api/incidencias/${currentFolio}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
 
-      // Auto-send report
       const envRes = await fetch(`${API}/api/incidencias/${currentFolio}/enviar`, { method:'POST' });
       const envData = await envRes.json();
       if (envData.success) alert('✅ Reporte enviado correctamente');
@@ -526,11 +575,9 @@ async function saveForm(isEdit) {
 
       showDashboard();
     } else {
-      body.tecnico_correo = user?.correo || '';
       const res = await fetch(`${API}/api/incidencias`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const result = await res.json();
       currentFolio = result.folio;
-      // After creation, go to edit mode so they can add photos
       showForm(result.folio);
     }
   } catch(e) {
@@ -541,6 +588,7 @@ async function saveForm(isEdit) {
 // --- DETAIL ---
 async function showDetail(folio) {
   currentFolio = folio;
+  const isAdmin = user?.rol === 'admin';
   render(`
     <div class="header">
       <button class="btn-back" onclick="showDashboard()">←</button>
@@ -563,7 +611,8 @@ async function showDetail(folio) {
 
     let html = `
       <div class="detail-header">
-        <div class="folio">${i.folio}</div>
+        <div class="folio">${i.folio} ${badge}</div>
+        ${i.revisado == 1 ? '<div style="color:#2e7d32;font-size:12px;font-weight:600;margin-top:2px">✓ Revisado por supervisor</div>' : ''}
       </div>
       <div class="detail-field"><div class="label">Estación</div><div class="value">${i.estacion||'—'}</div></div>
       <div class="detail-field"><div class="label">Equipo</div><div class="value">${i.equipo||'—'}</div></div>
@@ -601,6 +650,25 @@ async function showDetail(folio) {
       }
     }
 
+    // Supervision section for admin
+    if (isAdmin) {
+      html += `
+        <div class="form-section" style="margin-top:16px">
+          <div class="form-section-title">👁️ Supervisión</div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="f_revisado" ${i.revisado == 1 ? 'checked' : ''} style="width:18px;height:18px">
+              Marcar como Revisado
+            </label>
+          </div>
+          <div class="form-group"><label>Nota de Supervisión</label>
+            <textarea id="f_nota_supervision" placeholder="Agrega una nota de supervisión...">${i.nota_supervision||''}</textarea>
+          </div>
+          <button class="btn-success" id="btn-guardar-supervision" style="font-size:13px;padding:10px">💾 Guardar Supervisión</button>
+        </div>
+      `;
+    }
+
     html += `<div class="detail-actions">
         <button class="btn-primary" onclick="showForm('${folio}')">✏️ EDITAR Y ENVIAR</button>
         <a href="${API}/api/incidencias/${folio}/pdf" target="_blank" class="btn-success" style="display:block;text-align:center;text-decoration:none;padding:11px;border-radius:8px;margin-bottom:4px">📄 DESCARGAR PDF</a>
@@ -609,9 +677,25 @@ async function showDetail(folio) {
       </div>`;
 
     $('detail-content').innerHTML = html;
+
+    if (isAdmin) {
+      $('btn-guardar-supervision').onclick = () => guardarSupervision(folio);
+    }
   } catch(e) {
     const c = $('detail-content');
     if (c) c.innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+async function guardarSupervision(folio) {
+  const revisado = $('f_revisado')?.checked ? 1 : 0;
+  const nota = $('f_nota_supervision')?.value || '';
+  try {
+    await fetch(`${API}/api/incidencias/${folio}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ revisado, nota_supervision: nota }) });
+    alert('✅ Supervisión guardada');
+    showDetail(folio);
+  } catch(e) {
+    alert('Error: '+e.message);
   }
 }
 
@@ -623,8 +707,6 @@ async function enviarReporte(folio) {
     else alert('❌ Error: '+(data.error||'desconocido'));
   } catch(e) { alert('Error: '+e.message); }
 }
-
-
 
 // --- INIT ---
 if (user) {

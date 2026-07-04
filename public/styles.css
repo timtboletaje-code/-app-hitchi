@@ -92,4 +92,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .error-msg { background: #ffebee; color: #c62828; padding: 10px; border-radius: 8px; margin: 6px 10px; font-size: 13px; }
 .success-msg { background: #e8f5e9; color: #2e7d32; padding: 10px; border-radius: 8px; margin: 6px 10px; font-size: 13px; }
 
+.admin-link { color: #888; text-decoration: none; font-size: 12px; cursor: pointer; }
+.filtros input[type="date"] { font-family: inherit; }
+.photo-counter { font-size: 11px; color: #888; margin-top: 2px; }
+
 @media (max-width: 480px) { #app { max-width: 100%; } }
