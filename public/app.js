@@ -811,23 +811,25 @@ async function loadUserList() {
     let html = '';
     users.forEach(u => {
       const checked = u.activo == 1 ? 'checked' : '';
-      html += \`<div style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid #f0f0f0">
-        <input type="checkbox" \${checked} onchange="toggleUser(\${u.id})" style="width:18px;height:18px">
-        <span style="flex:1;font-size:14px">\${u.nombre}</span>
-        <span style="font-size:10px;color:#888">\${u.rol}</span>
-        \${u.rol === 'tecnico' ? \`<button onclick="deleteUser(\${u.id})" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px">×</button>\` : ''}
-      </div>\`;
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid #f0f0f0">';
+      html += '<input type="checkbox" ' + checked + ' onchange="toggleUser(' + u.id + ')" style="width:18px;height:18px">';
+      html += '<span style="flex:1;font-size:14px">' + u.nombre + '</span>';
+      html += '<span style="font-size:10px;color:#888">' + u.rol + '</span>';
+      if (u.rol === 'tecnico') {
+        html += '<button onclick="deleteUser(' + u.id + ')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px">\u00d7</button>';
+      }
+      html += '</div>';
     });
     container.innerHTML = html;
   } catch(e) { console.error(e); }
 }
 async function toggleUser(id) {
-  await fetch(\`\${API}/api/usuarios/\${id}/toggle\`, { method:'PUT' });
+  await fetch(API + '/api/usuarios/' + id + '/toggle', { method:'PUT' });
   loadUserList();
 }
 async function deleteUser(id) {
   if (!confirm('¿Eliminar este usuario?')) return;
-  await fetch(\`\${API}/api/usuarios/\${id}\`, { method:'DELETE' });
+  await fetch(API + '/api/usuarios/' + id, { method:'DELETE' });
   loadUserList();
 }
 
