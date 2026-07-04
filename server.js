@@ -334,15 +334,13 @@ async function generarExcel(folio) {
   ws.getRow(r).height = 18;
   r++;
 
-  // REPORTE FOTOGRÁFICO - flexible layout
+  // REPORTE FOTOGRÁFICO - fixed area
   sectionHeader('REPORTE FOTOGRÁFICO');
   const antes = fotos.filter(f => f.tipo === 'antes');
   const despues = fotos.filter(f => f.tipo === 'despues');
   const maxRows = Math.max(Math.ceil(antes.length / 2), Math.ceil(despues.length / 2), 1);
-
-  // Calculate row height: photos share remaining space with signatures
-  // ~5 rows of photos max (4+4), fit within ~200px total
-  const photoRowHeight = Math.min(90, Math.floor(180 / maxRows));
+  const photoSectionRows = 10;
+  const photoRowHeight = Math.floor(140 / maxRows);
 
   function colLetter(n) {
     let s = '';
@@ -351,7 +349,7 @@ async function generarExcel(folio) {
   }
 
   for (let row = 0; row < maxRows; row++) {
-    // Antes cells
+    const rowSpan = Math.floor(photoSectionRows / maxRows);
     for (let c2 = 0; c2 < 2; c2++) {
       const idx = row * 2 + c2;
       const col = 3 + c2 * 2;
@@ -360,7 +358,7 @@ async function generarExcel(folio) {
         if (fs.existsSync(fp)) {
           try {
             const img = wb.addImage({ filename: fp, extension: 'png' });
-            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + 4}`);
+            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + rowSpan - 1}`);
           } catch(e) {}
         }
       }
@@ -368,7 +366,6 @@ async function generarExcel(folio) {
       c(r, col, idx < antes.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
       addBorder(r, col, col + 1);
     }
-    // Despues cells
     for (let c2 = 0; c2 < 2; c2++) {
       const idx = row * 2 + c2;
       const col = 9 + c2 * 2;
@@ -377,7 +374,7 @@ async function generarExcel(folio) {
         if (fs.existsSync(fp)) {
           try {
             const img = wb.addImage({ filename: fp, extension: 'png' });
-            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + 4}`);
+            ws.addImage(img, `${colLetter(col)}${r}:${colLetter(col + 1)}${r + rowSpan - 1}`);
           } catch(e) {}
         }
       }
@@ -385,12 +382,10 @@ async function generarExcel(folio) {
       c(r, col, idx < despues.length ? '' : '—', { fontSize: 5, align: 'center', fill: 'FFF5F5F5' });
       addBorder(r, col, col + 1);
     }
-    ws.getRow(r).height = photoRowHeight;
-    // Fill borders for empty cells
+    ws.getRow(r).height = Math.floor(140 / maxRows);
     for (let cc = 3; cc <= 12; cc++) { addBorder(r, cc, cc); }
-    // Add borders for rows that images extend into
-    for (let rr = r + 1; rr <= r + 4; rr++) { for (let cc = 3; cc <= 12; cc++) addBorder(rr, cc, cc); }
-    r += 5;
+    for (let rr = r + 1; rr <= r + rowSpan - 1; rr++) { for (let cc = 3; cc <= 12; cc++) addBorder(rr, cc, cc); }
+    r += rowSpan;
   }
 
   // SIGNATURES
@@ -540,13 +535,12 @@ function generarPDF(folio) {
     doc.fill('#555').fontSize(5.5).font('Helvetica-Bold').text('Refacciones', M + 2, y + 1);
     doc.fill('#000').fontSize(6.5).font('Helvetica').text(i.refacciones || '', M + 2, y + 9, { width: W - 4 }); y += 18;
 
-    // REPORTE FOTOGRÁFICO - flexible, always fits on one page
-    const sigSpace = 48;
-    const availableH = pageBottom - y - sigSpace - 14;
+    // REPORTE FOTOGRÁFICO - fixed area, matches V1 cell size
     const antesF = fotos.filter(f => f.tipo === 'antes');
     const despuesF = fotos.filter(f => f.tipo === 'despues');
     const totalRows = Math.max(Math.ceil(antesF.length / 2), Math.ceil(despuesF.length / 2), 1);
-    const photoH = Math.max(40, Math.min(95, Math.floor(availableH / totalRows) - 6));
+    const photoSectionH = 140;
+    const cellH = photoSectionH / totalRows;
     const halfW = (W - 8) / 2;
     const cellW = (halfW - 4) / 2;
 
@@ -558,29 +552,28 @@ function generarPDF(folio) {
     y += 10;
 
     for (let row = 0; row < totalRows; row++) {
-      if (y + photoH > pageBottom - sigSpace) { photoH = Math.max(30, pageBottom - sigSpace - y); }
-      // Antes: 2 photos per row
       for (let c2 = 0; c2 < 2; c2++) {
         const idx = row * 2 + c2;
         const px = M + c2 * (cellW + 4);
+        const py = y + row * cellH;
         if (idx < antesF.length) {
           const fp = path.join(__dirname, antesF[idx].url_foto);
-          if (fs.existsSync(fp)) try { doc.image(fp, px, y, { fit: [cellW - 2, photoH - 2] }); } catch(e) {}
+          if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
         }
-        doc.rect(px, y, cellW, photoH).stroke('#cccccc');
+        doc.rect(px, py, cellW, cellH).stroke('#cccccc');
       }
-      // Despues: 2 photos per row
       for (let c2 = 0; c2 < 2; c2++) {
         const idx = row * 2 + c2;
         const px = M + halfW + 10 + c2 * (cellW + 4);
+        const py = y + row * cellH;
         if (idx < despuesF.length) {
           const fp = path.join(__dirname, despuesF[idx].url_foto);
-          if (fs.existsSync(fp)) try { doc.image(fp, px, y, { fit: [cellW - 2, photoH - 2] }); } catch(e) {}
+          if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
         }
-        doc.rect(px, y, cellW, photoH).stroke('#cccccc');
+        doc.rect(px, py, cellW, cellH).stroke('#cccccc');
       }
-      y += photoH + 3;
     }
+    y += photoSectionH + 3;
 
     // SIGNATURES
     y += 6;
