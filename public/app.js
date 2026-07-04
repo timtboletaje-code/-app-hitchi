@@ -104,6 +104,7 @@ async function showDashboard() {
     <div class="header">
       <h1>${isAdmin ? 'ADMIN' : 'APP HITCHI'}</h1>
       <span class="user-badge">${user?.nombre||''}</span>
+      ${isAdmin ? '<button class="btn-logout" onclick="showAdminPanel()" style="margin-right:6px">⚙️</button>' : ''}
       <button class="btn-logout" id="btn-logout">Salir</button>
     </div>
     <div class="filtros" style="padding:8px 12px;background:#fff;border-bottom:1px solid #ddd">
@@ -771,6 +772,63 @@ async function enviarReporte(folio) {
     if (data.success) alert('✅ Reporte enviado por correo');
     else alert('❌ Error: '+(data.error||'desconocido'));
   } catch(e) { alert('Error: '+e.message); }
+}
+
+// --- ADMIN PANEL ---
+async function showAdminPanel() {
+  render(`
+    <div class="header">
+      <h1>ADMIN</h1>
+      <button class="btn-back" onclick="showDashboard()">←</button>
+      <button class="btn-logout" onclick="showDashboard()">Cerrar</button>
+    </div>
+    <div style="padding:12px;max-width:400px;margin:0 auto">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">👤 Usuarios autorizados</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input type="text" id="new-user-name" placeholder="Nombre del técnico" style="flex:1;padding:7px;border:2px solid #ddd;border-radius:6px;font-size:12px">
+        <button class="btn-primary" id="btn-add-user" style="padding:7px 14px;font-size:12px">+</button>
+      </div>
+      <div id="user-list"><div class="loading">Cargando...</div></div>
+    </div>
+  `);
+  $('btn-add-user').onclick = async () => {
+    const name = $('new-user-name')?.value.trim();
+    if (!name) return;
+    await fetch(`${API}/api/usuarios`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nombre:name}) });
+    $('new-user-name').value = '';
+    loadUserList();
+  };
+  $('new-user-name').onkeydown = e => { if (e.key==='Enter') $('btn-add-user').click(); };
+  await loadUserList();
+}
+async function loadUserList() {
+  try {
+    const res = await fetch(`${API}/api/usuarios`);
+    const users = await res.json();
+    const container = $('user-list');
+    if (!container) return;
+    if (!users.length) { container.innerHTML = '<div style="color:#999;font-size:12px">Sin usuarios</div>'; return; }
+    let html = '';
+    users.forEach(u => {
+      const checked = u.activo == 1 ? 'checked' : '';
+      html += \`<div style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid #f0f0f0">
+        <input type="checkbox" \${checked} onchange="toggleUser(\${u.id})" style="width:18px;height:18px">
+        <span style="flex:1;font-size:14px">\${u.nombre}</span>
+        <span style="font-size:10px;color:#888">\${u.rol}</span>
+        \${u.rol === 'tecnico' ? \`<button onclick="deleteUser(\${u.id})" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px">×</button>\` : ''}
+      </div>\`;
+    });
+    container.innerHTML = html;
+  } catch(e) { console.error(e); }
+}
+async function toggleUser(id) {
+  await fetch(\`\${API}/api/usuarios/\${id}/toggle\`, { method:'PUT' });
+  loadUserList();
+}
+async function deleteUser(id) {
+  if (!confirm('¿Eliminar este usuario?')) return;
+  await fetch(\`\${API}/api/usuarios/\${id}\`, { method:'DELETE' });
+  loadUserList();
 }
 
 // --- INIT ---

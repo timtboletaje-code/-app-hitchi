@@ -72,6 +72,8 @@ async function start() {
   if (query('SELECT COUNT(*) as c FROM usuarios')[0].c === 0) {
     run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', ['Técnico Demo', 'tecnico']);
   }
+  try { db.run("ALTER TABLE usuarios ADD COLUMN activo INTEGER DEFAULT 1"); } catch(e) {}
+  try { db.run("UPDATE usuarios SET activo = 1 WHERE activo IS NULL"); } catch(e) {}
 
   saveDB();
 }
@@ -80,11 +82,8 @@ async function start() {
 app.post('/api/login', (req, res) => {
   const { nombre } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
-  let u = get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ?', [nombre.trim(), 'tecnico']);
-  if (!u) {
-    run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', [nombre.trim(), 'tecnico']);
-    u = get('SELECT * FROM usuarios WHERE nombre = ?', [nombre.trim()]);
-  }
+  const u = get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ? AND activo = 1', [nombre.trim(), 'tecnico']);
+  if (!u) return res.status(401).json({ error: 'Usuario no autorizado' });
   res.json(u);
 });
 
@@ -104,7 +103,24 @@ app.post('/api/login-admin', (req, res) => {
 app.get('/api/estaciones', (req, res) => res.json(estacionesUnicas));
 app.get('/api/tipos-equipo', (req, res) => res.json(tiposEquipoUnicos));
 app.get('/api/tecnicos', (req, res) => {
-  res.json(query('SELECT DISTINCT nombre FROM usuarios WHERE rol = ? ORDER BY nombre', ['tecnico']));
+  res.json(query('SELECT DISTINCT nombre FROM usuarios WHERE rol = ? AND activo = 1 ORDER BY nombre', ['tecnico']));
+});
+app.get('/api/usuarios', (req, res) => {
+  res.json(query('SELECT id, nombre, rol, activo FROM usuarios ORDER BY nombre'));
+});
+app.post('/api/usuarios', (req, res) => {
+  const { nombre } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+  run('INSERT OR IGNORE INTO usuarios (nombre, rol, activo) VALUES (?, ?, 1)', [nombre.trim(), 'tecnico']);
+  res.json({ success: true });
+});
+app.put('/api/usuarios/:id/toggle', (req, res) => {
+  run("UPDATE usuarios SET activo = CASE WHEN activo = 1 THEN 0 ELSE 1 END WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
+  res.json({ success: true });
+});
+app.delete('/api/usuarios/:id', (req, res) => {
+  run("DELETE FROM usuarios WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
+  res.json({ success: true });
 });
 app.get('/api/equipos-por-estacion', (req, res) => {
   const est = req.query.estacion;
