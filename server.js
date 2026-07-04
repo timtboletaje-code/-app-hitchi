@@ -394,10 +394,10 @@ async function generarExcel(folio) {
   sigs.forEach((s, idx) => {
     const baseCol = 3 + idx * 4;
     try { ws.mergeCells(r, baseCol, r, baseCol + 1); } catch(e) {}
-    ws.getCell(r, baseCol).border = { bottom: { style: 'medium', color: { argb: 'FF333333' } } };
-    addBorder(r, baseCol, baseCol + 1);
+    c(r, baseCol, s.name, { fontSize: 8, align: 'center' });
     try { ws.mergeCells(r + 1, baseCol, r + 1, baseCol + 1); } catch(e) {}
-    c(r + 1, baseCol, s.name, { fontSize: 8, align: 'center' });
+    ws.getCell(r + 1, baseCol).border = { bottom: { style: 'medium', color: { argb: 'FF333333' } } };
+    addBorder(r + 1, baseCol, baseCol + 1);
     try { ws.mergeCells(r + 2, baseCol, r + 2, baseCol + 1); } catch(e) {}
     c(r + 2, baseCol, s.role, { bold: true, fontSize: 7, color: '555555', align: 'center' });
     try { ws.mergeCells(r + 3, baseCol, r + 3, baseCol + 1); } catch(e) {}
@@ -532,19 +532,19 @@ function generarPDF(folio) {
     doc.fill('#555').fontSize(5.5).font('Helvetica-Bold').text('Refacciones', M + 2, y + 1);
     doc.fill('#000').fontSize(6.5).font('Helvetica').text(i.refacciones || '', M + 2, y + 9, { width: W - 4 }); y += 18;
 
-    // REPORTE FOTOGRÁFICO - 2x2 grid per side, 140px fixed height
+    // REPORTE FOTOGRÁFICO - 2x2 grid per side, fills available space
     const antesF = fotos.filter(f => f.tipo === 'antes');
     const despuesF = fotos.filter(f => f.tipo === 'despues');
-    const photoSectionH = 140;
-    const cellH = photoSectionH / 2;
+    const fotoSectionY = y;
+    drawSectionTitle('REPORTE FOTOGRÁFICO', y); y += 16;
+    doc.fill('#CC0000').fontSize(7).font('Helvetica-Bold').text('ANTES', M + 2, y);
+    doc.fill('#2e7d32').fontSize(7).font('Helvetica-Bold').text('DESPUÉS', M + (W - 8) / 2 + 10, y);
+    y += 10;
     const halfW = (W - 8) / 2;
     const cellW = (halfW - 4) / 2;
-
-    drawSectionTitle('REPORTE FOTOGRÁFICO', y); y += 16;
-
-    doc.fill('#CC0000').fontSize(7).font('Helvetica-Bold').text('ANTES', M + 2, y);
-    doc.fill('#2e7d32').fontSize(7).font('Helvetica-Bold').text('DESPUÉS', M + halfW + 10, y);
-    y += 10;
+    const remainingH = pageBottom - y - 50;
+    const photoSectionH = Math.max(120, remainingH);
+    const cellH = photoSectionH / 2;
 
     for (let i = 0; i < 4; i++) {
       const row = Math.floor(i / 2);
@@ -564,13 +564,13 @@ function generarPDF(folio) {
       const py = y + row * cellH;
       if (i < despuesF.length) {
         const fp = path.join(__dirname, despuesF[i].url_foto);
-        if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); } catch(e) {}
+        if (fs.existsSync(fp)) try { doc.image(fp, px + 1, py + 1, { fit: [cellW - 2, cellH - 2] }); }catch(e) {}
       }
       doc.rect(px, py, cellW, cellH).stroke('#cccccc');
     }
     y += photoSectionH + 3;
 
-    // SIGNATURES
+    // SIGNATURES - line below the name
     y += 6;
     const blockW = (W - 30) / 3;
     const starts = [M, M + blockW + 15, M + 2 * (blockW + 15)];
@@ -581,8 +581,8 @@ function generarPDF(folio) {
     ].forEach((s, idx) => {
       const x = starts[idx];
       const lineW = blockW - 10;
-      doc.moveTo(x, y).lineTo(x + lineW, y).stroke('#333');
-      doc.fill('#000').fontSize(7.5).font('Helvetica').text(s.name, x, y + 5, { width: lineW, align: 'center' });
+      doc.fill('#000').fontSize(7.5).font('Helvetica').text(s.name, x, y, { width: lineW, align: 'center' });
+      doc.moveTo(x, y + 12).lineTo(x + lineW, y + 12).stroke('#333');
       doc.fill('#555').fontSize(6.5).font('Helvetica-Bold').text(s.role, x, y + 16, { width: lineW, align: 'center' });
       doc.fill('#888').fontSize(5.5).font('Helvetica-Oblique').text('Nombre y Firma', x, y + 26, { width: lineW, align: 'center' });
     });
