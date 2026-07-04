@@ -542,8 +542,8 @@ function generarPDF(folio) {
     y += 10;
     const halfW = (W - 8) / 2;
     const cellW = (halfW - 4) / 2;
-    const remainingH = pageBottom - y - 50;
-    const photoSectionH = Math.max(120, remainingH);
+    const remainingH = pageBottom - y - 65;
+    const photoSectionH = Math.max(100, remainingH);
     const cellH = photoSectionH / 2;
 
     for (let i = 0; i < 4; i++) {
