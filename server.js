@@ -45,11 +45,14 @@ async function start() {
   db = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
 
   // Create incidencias and fotos tables (new schema)
-  db.run(`CREATE TABLE IF NOT EXISTS incidencias (folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT, fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT, falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT, descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT, herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, gerente_mantenimiento TEXT, supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', revisado INTEGER DEFAULT 0, nota_supervision TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now', '-6 horas')))`);
-  db.run(`CREATE TABLE IF NOT EXISTS fotos (id INTEGER PRIMARY KEY AUTOINCREMENT, folio TEXT, url_foto TEXT, tipo TEXT, fecha_toma TEXT DEFAULT (datetime('now', '-6 horas')), FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
+  db.run(`CREATE TABLE IF NOT EXISTS incidencias (folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT, fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT, falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT, descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT, herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, gerente_mantenimiento TEXT, supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', revisado INTEGER DEFAULT 0, nota_supervision TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now', '-6 hours')))`);
+  db.run(`CREATE TABLE IF NOT EXISTS fotos (id INTEGER PRIMARY KEY AUTOINCREMENT, folio TEXT, url_foto TEXT, tipo TEXT, fecha_toma TEXT DEFAULT (datetime('now', '-6 hours')), FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
   // Add columns if table existed without them
   try { db.run("ALTER TABLE incidencias ADD COLUMN revisado INTEGER DEFAULT 0"); } catch(e) {}
   try { db.run("ALTER TABLE incidencias ADD COLUMN nota_supervision TEXT DEFAULT ''"); } catch(e) {}
+  try { db.run("UPDATE incidencias SET created_at = datetime('now', '-6 hours') WHERE created_at IS NULL"); } catch(e) {}
+  try { db.run("UPDATE incidencias SET f_reporte = date('now') WHERE f_reporte IS NULL OR f_reporte = ''"); } catch(e) {}
+  try { db.run("UPDATE fotos SET fecha_toma = datetime('now', '-6 hours') WHERE fecha_toma IS NULL"); } catch(e) {}
 
   // Migrate usuarios table: check if old schema (with correo column)
   const cols = query("PRAGMA table_info('usuarios')");
@@ -121,8 +124,8 @@ app.post('/api/incidencias', (req, res) => {
   const d = req.body;
   if (!d.estacion || !d.equipo) return res.status(400).json({ error: 'Estación y equipo requeridos' });
   const folio = d.folio || `HIT-${new Date().toISOString().replace(/[^0-9]/g,'').slice(0,14)}`;
-  run(`INSERT INTO incidencias (folio, f_reporte, h_reporte, f_llegada, h_llegada, fecha_cierre, hora_cierre, estacion, equipo, loc_id, falla_fecha_reporte, como_fue_identificado, causa_raiz, metodo_diagnostico, descripcion_correccion, tipo_pruebas, estado_equipo, acciones_preventivas, herramienta_material, refacciones, tecnico_asignado, gerente_mantenimiento, supervisor_uo_timt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [folio, d.f_reporte||'', d.h_reporte||'', d.f_llegada||'', d.h_llegada||'', d.fecha_cierre||'', d.hora_cierre||'', d.estacion, d.equipo, d.loc_id||'', d.falla_fecha_reporte||'', d.como_fue_identificado||'', d.causa_raiz||'', d.metodo_diagnostico||'', d.descripcion_correccion||'', d.tipo_pruebas||'', d.estado_equipo||'', d.acciones_preventivas||'', d.herramienta_material||'', d.refacciones||'', d.tecnico_asignado||'', d.gerente_mantenimiento||'', d.supervisor_uo_timt||'']);
+  run(`INSERT INTO incidencias (folio, f_reporte, h_reporte, f_llegada, h_llegada, fecha_cierre, hora_cierre, estacion, equipo, loc_id, falla_fecha_reporte, como_fue_identificado, causa_raiz, metodo_diagnostico, descripcion_correccion, tipo_pruebas, estado_equipo, acciones_preventivas, herramienta_material, refacciones, tecnico_asignado, gerente_mantenimiento, supervisor_uo_timt, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', '-6 hours'))`,
+    [folio, d.f_reporte||new Date().toISOString().split('T')[0], d.h_reporte||'', d.f_llegada||'', d.h_llegada||'', d.fecha_cierre||'', d.hora_cierre||'', d.estacion, d.equipo, d.loc_id||'', d.falla_fecha_reporte||'', d.como_fue_identificado||'', d.causa_raiz||'', d.metodo_diagnostico||'', d.descripcion_correccion||'', d.tipo_pruebas||'', d.estado_equipo||'', d.acciones_preventivas||'', d.herramienta_material||'', d.refacciones||'', d.tecnico_asignado||'', d.gerente_mantenimiento||'', d.supervisor_uo_timt||'']);
   res.json({ folio });
 });
 
@@ -164,7 +167,7 @@ app.put('/api/incidencias/:folio', (req, res) => {
 app.post('/api/upload/:folio', upload.single('foto'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió imagen' });
   const url = `/uploads/${req.file.filename}`;
-  run('INSERT INTO fotos (folio, url_foto, tipo) VALUES (?, ?, ?)', [req.params.folio, url, req.body.tipo || 'general']);
+  run(`INSERT INTO fotos (folio, url_foto, tipo, fecha_toma) VALUES (?, ?, ?, datetime('now', '-6 hours'))`, [req.params.folio, url, req.body.tipo || 'general']);
   res.json({ url, tipo: req.body.tipo });
 });
 
