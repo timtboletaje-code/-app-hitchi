@@ -420,7 +420,7 @@ function renderPhotos(fotos) {
       slot.onclick = () => replacePhoto('antes', i+1);
     } else {
       slot.innerHTML = `<div class="placeholder"><div class="icon">📷</div>Antes ${i+1}</div>`;
-      slot.onclick = () => takePhoto('antes');
+      slot.onclick = () => showPhotoPicker('antes');
     }
     antesGrid.appendChild(slot);
   }
@@ -437,7 +437,7 @@ function renderPhotos(fotos) {
       slot.onclick = () => replacePhoto('despues', i+1);
     } else {
       slot.innerHTML = `<div class="placeholder"><div class="icon">📷</div>Después ${i+1}</div>`;
-      slot.onclick = () => takePhoto('despues');
+      slot.onclick = () => showPhotoPicker('despues');
     }
     despuesGrid.appendChild(slot);
   }
@@ -452,12 +452,34 @@ function renderPhotos(fotos) {
 let photoTipo = 'antes';
 let currentFotos = [];
 
-function takePhoto(tipo) {
+function showPhotoPicker(tipo) {
+  const existing = document.querySelector('.photo-picker-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'photo-picker-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center';
+  const menu = document.createElement('div');
+  menu.style.cssText = 'background:#fff;border-radius:12px;padding:20px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+  menu.innerHTML = `
+    <div style="text-align:center;margin-bottom:14px;font-weight:700;font-size:15px;color:#333">Foto ${tipo === 'antes' ? 'ANTES' : 'DESPUÉS'}</div>
+    <button class="btn-primary" id="picker-camera" style="width:100%;margin-bottom:8px;font-size:14px;padding:13px">📷 Tomar foto</button>
+    <button class="btn-secondary" id="picker-gallery" style="width:100%;font-size:14px;padding:13px;background:#555;color:#fff">🖼️ Elegir de galería</button>
+    <button id="picker-cancel" style="width:100%;margin-top:10px;padding:10px;border:none;background:transparent;color:#999;font-size:13px;cursor:pointer">Cancelar</button>
+  `;
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.getElementById('picker-camera').onclick = () => { overlay.remove(); takePhoto(tipo, 'camera'); };
+  document.getElementById('picker-gallery').onclick = () => { overlay.remove(); takePhoto(tipo, 'gallery'); };
+  document.getElementById('picker-cancel').onclick = () => overlay.remove();
+}
+
+function takePhoto(tipo, source) {
   photoTipo = tipo;
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.capture = 'environment';
+  if (source === 'camera') input.capture = 'environment';
   input.style = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
   input.onchange = function(e) {
     if (e.target.files.length) {
@@ -474,7 +496,7 @@ function takePhoto(tipo) {
 }
 
 function replacePhoto(tipo) {
-  takePhoto(tipo);
+  showPhotoPicker(tipo);
 }
 
 function compressImage(file, maxDim, quality, callback) {
