@@ -3,3 +3,5 @@ uploads/*
 !uploads/.gitkeep
 hitchi.db
 .env
+.~lock.*
+CONFIGURAR_VOLUMEN_RAILWAY.txt

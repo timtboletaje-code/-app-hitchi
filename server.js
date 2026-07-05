@@ -6,14 +6,136 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
-const initSqlJs = require('sql.js');
+require('express-async-errors');
+
+const usePg = !!process.env.DATABASE_URL;
+let query, run, get, initDB;
+
+if (usePg) {
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  query = async (sql, params = []) => {
+    let i = 0; const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+    const { rows } = await pool.query(pgSql, params);
+    return rows;
+  };
+  run = async (sql, params = []) => {
+    let i = 0; const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+    await pool.query(pgSql, params);
+  };
+  get = async (sql, params = []) => {
+    let i = 0; const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+    const { rows } = await pool.query(pgSql, params);
+    return rows.length ? rows[0] : null;
+  };
+
+  initDB = async () => {
+    await run(`CREATE TABLE IF NOT EXISTS incidencias (
+      folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT,
+      fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT,
+      falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT,
+      descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT,
+      herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, gerente_mantenimiento TEXT,
+      supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', revisado INTEGER DEFAULT 0,
+      nota_supervision TEXT DEFAULT '', created_at TIMESTAMP DEFAULT (NOW() - INTERVAL '6 hours'))`);
+    await run(`CREATE TABLE IF NOT EXISTS fotos (
+      id SERIAL PRIMARY KEY, folio TEXT, url_foto TEXT, tipo TEXT,
+      fecha_toma TIMESTAMP DEFAULT (NOW() - INTERVAL '6 hours'),
+      FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
+    try { await run("ALTER TABLE incidencias ADD COLUMN IF NOT EXISTS revisado INTEGER DEFAULT 0"); } catch(e) {}
+    try { await run("ALTER TABLE incidencias ADD COLUMN IF NOT EXISTS nota_supervision TEXT DEFAULT ''"); } catch(e) {}
+    const mxNow = mxTimestamp();
+    try { await run("UPDATE incidencias SET created_at = $1 WHERE created_at IS NULL", [mxNow]); } catch(e) {}
+    try { await run("UPDATE incidencias SET f_reporte = $1 WHERE f_reporte IS NULL OR f_reporte = ''", [mxDateStr()]); } catch(e) {}
+    try { await run("UPDATE fotos SET fecha_toma = $1 WHERE fecha_toma IS NULL", [mxNow]); } catch(e) {}
+
+    const cols = await query("SELECT column_name FROM information_schema.columns WHERE table_name = 'usuarios' AND table_schema = 'public'");
+    if (cols.length > 0 && cols.some(c => c.column_name === 'correo')) {
+      await run("DROP TABLE IF EXISTS usuarios_old");
+      await run("ALTER TABLE usuarios RENAME TO usuarios_old");
+      await run("CREATE TABLE usuarios (id SERIAL PRIMARY KEY, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
+      await run("INSERT INTO usuarios (id, nombre, rol) SELECT id, nombre, rol FROM usuarios_old ON CONFLICT (nombre) DO NOTHING");
+      await run("DROP TABLE IF EXISTS usuarios_old");
+    }
+    const cols2 = await query("SELECT column_name FROM information_schema.columns WHERE table_name = 'usuarios' AND table_schema = 'public'");
+    if (cols2.length === 0) {
+      await run("CREATE TABLE usuarios (id SERIAL PRIMARY KEY, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
+    }
+    const cnt = await get('SELECT COUNT(*) as c FROM usuarios');
+    if (parseInt(cnt.c) === 0) {
+      await run('INSERT INTO usuarios (nombre, rol) VALUES ($1, $2)', ['Técnico Demo', 'tecnico']);
+    }
+    try { await run("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo INTEGER DEFAULT 1"); } catch(e) {}
+    try { await run("UPDATE usuarios SET activo = 1 WHERE activo IS NULL"); } catch(e) {}
+  };
+} else {
+  const initSqlJs = require('sql.js');
+  let sqliteDb;
+  const DATA_PATH = process.env.DATA_PATH || '.';
+  const DB_PATH = path.join(DATA_PATH, 'hitchi.db');
+
+  function saveDB() { const d = sqliteDb.export(); fs.writeFileSync(DB_PATH, Buffer.from(d)); }
+  query = async (sql, params = []) => { const s = sqliteDb.prepare(sql); if (params.length) s.bind(params); const r = []; while (s.step()) r.push(s.getAsObject()); s.free(); return r; };
+  run = async (sql, params = []) => { sqliteDb.run(sql, params); saveDB(); };
+  get = async (sql, params = []) => { const r = await query(sql, params); return r.length ? r[0] : null; };
+
+  initDB = async () => {
+    const SQL = await initSqlJs();
+    sqliteDb = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
+    const d = sqliteDb;
+
+    d.run(`CREATE TABLE IF NOT EXISTS incidencias (folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT, fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT, falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT, descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT, herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, gerente_mantenimiento TEXT, supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', revisado INTEGER DEFAULT 0, nota_supervision TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now', '-6 hours')))`);
+    d.run(`CREATE TABLE IF NOT EXISTS fotos (id INTEGER PRIMARY KEY AUTOINCREMENT, folio TEXT, url_foto TEXT, tipo TEXT, fecha_toma TEXT DEFAULT (datetime('now', '-6 hours')), FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
+    try { d.run("ALTER TABLE incidencias ADD COLUMN revisado INTEGER DEFAULT 0"); } catch(e) {}
+    try { d.run("ALTER TABLE incidencias ADD COLUMN nota_supervision TEXT DEFAULT ''"); } catch(e) {}
+    try { d.run("UPDATE incidencias SET created_at = datetime('now', '-6 hours') WHERE created_at IS NULL"); } catch(e) {}
+    try { d.run("UPDATE incidencias SET f_reporte = date('now') WHERE f_reporte IS NULL OR f_reporte = ''"); } catch(e) {}
+    try { d.run("UPDATE fotos SET fecha_toma = datetime('now', '-6 hours') WHERE fecha_toma IS NULL"); } catch(e) {}
+
+    const cols = await query("PRAGMA table_info('usuarios')");
+    const hasCorreo = cols.length > 0 && cols.some(c => c.name === 'correo');
+    if (hasCorreo) {
+      d.run("DROP TABLE IF EXISTS usuarios_old");
+      d.run("ALTER TABLE usuarios RENAME TO usuarios_old");
+      d.run("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
+      d.run("INSERT OR IGNORE INTO usuarios (id, nombre, rol) SELECT id, nombre, rol FROM usuarios_old");
+      d.run("DROP TABLE IF EXISTS usuarios_old");
+    }
+    const cols2 = await query("PRAGMA table_info('usuarios')");
+    if (cols2.length === 0) {
+      d.run("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
+    }
+    const cnt = await get('SELECT COUNT(*) as c FROM usuarios');
+    if (parseInt(cnt.c) === 0) {
+      await run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', ['Técnico Demo', 'tecnico']);
+    }
+    try { d.run("ALTER TABLE usuarios ADD COLUMN activo INTEGER DEFAULT 1"); } catch(e) {}
+    try { d.run("UPDATE usuarios SET activo = 1 WHERE activo IS NULL"); } catch(e) {}
+    saveDB();
+  };
+}
+
+function mxTimestamp() {
+  const d = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  return d.getUTCFullYear() + '-' +
+    String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getUTCDate()).padStart(2, '0') + ' ' +
+    String(d.getUTCHours()).padStart(2, '0') + ':' +
+    String(d.getUTCMinutes()).padStart(2, '0') + ':' +
+    String(d.getUTCSeconds()).padStart(2, '0');
+}
+function mxDateStr() {
+  const d = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  return d.getUTCFullYear() + '-' +
+    String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getUTCDate()).padStart(2, '0');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_PATH = process.env.DATA_PATH || '.';
-const UPLOADS_PATH = path.join(DATA_PATH, 'uploads');
-const DB_PATH = path.join(DATA_PATH, 'hitchi.db');
-let db;
+const BASE_DIR = process.env.DATA_PATH || '.';
+const UPLOADS_PATH = path.join(BASE_DIR, 'uploads');
 
 if (!fs.existsSync(UPLOADS_PATH)) fs.mkdirSync(UPLOADS_PATH, { recursive: true });
 
@@ -35,91 +157,48 @@ const equipos = JSON.parse(fs.readFileSync('equipos.json', 'utf8'));
 const estacionesUnicas = [...new Set(equipos.map(e => e.estacion))].sort();
 const tiposEquipoUnicos = [...new Set(equipos.map(e => e.equipo))].sort();
 
-function saveDB() { const d = db.export(); fs.writeFileSync(DB_PATH, Buffer.from(d)); }
-function query(sql, params = []) { const s = db.prepare(sql); if (params.length) s.bind(params); const r = []; while (s.step()) r.push(s.getAsObject()); s.free(); return r; }
-function run(sql, params = []) { db.run(sql, params); saveDB(); }
-function get(sql, params = []) { const r = query(sql, params); return r.length ? r[0] : null; }
-
-async function start() {
-  const SQL = await initSqlJs();
-  db = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
-
-  // Create incidencias and fotos tables (new schema)
-  db.run(`CREATE TABLE IF NOT EXISTS incidencias (folio TEXT PRIMARY KEY, f_reporte TEXT, h_reporte TEXT, f_llegada TEXT, h_llegada TEXT, fecha_cierre TEXT, hora_cierre TEXT, estacion TEXT, equipo TEXT, loc_id TEXT, falla_fecha_reporte TEXT, como_fue_identificado TEXT, causa_raiz TEXT, metodo_diagnostico TEXT, descripcion_correccion TEXT, tipo_pruebas TEXT, estado_equipo TEXT, acciones_preventivas TEXT, herramienta_material TEXT, refacciones TEXT, tecnico_asignado TEXT, gerente_mantenimiento TEXT, supervisor_uo_timt TEXT, estado TEXT DEFAULT 'EN PROCESO', revisado INTEGER DEFAULT 0, nota_supervision TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now', '-6 hours')))`);
-  db.run(`CREATE TABLE IF NOT EXISTS fotos (id INTEGER PRIMARY KEY AUTOINCREMENT, folio TEXT, url_foto TEXT, tipo TEXT, fecha_toma TEXT DEFAULT (datetime('now', '-6 hours')), FOREIGN KEY (folio) REFERENCES incidencias(folio))`);
-  // Add columns if table existed without them
-  try { db.run("ALTER TABLE incidencias ADD COLUMN revisado INTEGER DEFAULT 0"); } catch(e) {}
-  try { db.run("ALTER TABLE incidencias ADD COLUMN nota_supervision TEXT DEFAULT ''"); } catch(e) {}
-  try { db.run("UPDATE incidencias SET created_at = datetime('now', '-6 hours') WHERE created_at IS NULL"); } catch(e) {}
-  try { db.run("UPDATE incidencias SET f_reporte = date('now') WHERE f_reporte IS NULL OR f_reporte = ''"); } catch(e) {}
-  try { db.run("UPDATE fotos SET fecha_toma = datetime('now', '-6 hours') WHERE fecha_toma IS NULL"); } catch(e) {}
-
-  // Migrate usuarios table: check if old schema (with correo column)
-  const cols = query("PRAGMA table_info('usuarios')");
-  const hasCorreo = cols.length > 0 && cols.some(c => c.name === 'correo');
-  if (hasCorreo) {
-    db.run("DROP TABLE IF EXISTS usuarios_old");
-    db.run("ALTER TABLE usuarios RENAME TO usuarios_old");
-    db.run("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
-    // Handle duplicate nombres: keep first occurrence
-    db.run("INSERT OR IGNORE INTO usuarios (id, nombre, rol) SELECT id, nombre, rol FROM usuarios_old");
-    db.run("DROP TABLE IF EXISTS usuarios_old");
-  }
-  const cols2 = query("PRAGMA table_info('usuarios')");
-  if (cols2.length === 0) {
-    db.run("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE NOT NULL, rol TEXT DEFAULT 'tecnico')");
-  }
-  if (query('SELECT COUNT(*) as c FROM usuarios')[0].c === 0) {
-    run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', ['Técnico Demo', 'tecnico']);
-  }
-  try { db.run("ALTER TABLE usuarios ADD COLUMN activo INTEGER DEFAULT 1"); } catch(e) {}
-  try { db.run("UPDATE usuarios SET activo = 1 WHERE activo IS NULL"); } catch(e) {}
-
-  saveDB();
-}
-
 // --- LOGIN ---
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { nombre } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
-  const u = get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ? AND activo = 1', [nombre.trim(), 'tecnico']);
+  const u = await get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ? AND activo = 1', [nombre.trim(), 'tecnico']);
   if (!u) return res.status(401).json({ error: 'Usuario no autorizado' });
   res.json(u);
 });
 
-app.post('/api/login-admin', (req, res) => {
+app.post('/api/login-admin', async (req, res) => {
   const { nombre, password } = req.body;
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
   if (password !== adminPass) return res.status(401).json({ error: 'Contraseña incorrecta' });
-  let u = get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ?', [nombre.trim(), 'admin']);
+  let u = await get('SELECT * FROM usuarios WHERE nombre = ? AND rol = ?', [nombre.trim(), 'admin']);
   if (!u) {
-    run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', [nombre.trim(), 'admin']);
-    u = get('SELECT * FROM usuarios WHERE nombre = ?', [nombre.trim()]);
+    await run('INSERT INTO usuarios (nombre, rol) VALUES (?, ?)', [nombre.trim(), 'admin']);
+    u = await get('SELECT * FROM usuarios WHERE nombre = ?', [nombre.trim()]);
   }
   res.json(u);
 });
 
 app.get('/api/estaciones', (req, res) => res.json(estacionesUnicas));
 app.get('/api/tipos-equipo', (req, res) => res.json(tiposEquipoUnicos));
-app.get('/api/tecnicos', (req, res) => {
-  res.json(query('SELECT DISTINCT nombre FROM usuarios WHERE rol = ? AND activo = 1 ORDER BY nombre', ['tecnico']));
+app.get('/api/tecnicos', async (req, res) => {
+  res.json(await query('SELECT DISTINCT nombre FROM usuarios WHERE rol = ? AND activo = 1 ORDER BY nombre', ['tecnico']));
 });
-app.get('/api/usuarios', (req, res) => {
-  res.json(query('SELECT id, nombre, rol, activo FROM usuarios ORDER BY nombre'));
+app.get('/api/usuarios', async (req, res) => {
+  res.json(await query('SELECT id, nombre, rol, activo FROM usuarios ORDER BY nombre'));
 });
-app.post('/api/usuarios', (req, res) => {
+app.post('/api/usuarios', async (req, res) => {
   const { nombre } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre requerido' });
-  run('INSERT OR IGNORE INTO usuarios (nombre, rol, activo) VALUES (?, ?, 1)', [nombre.trim(), 'tecnico']);
+  await run('INSERT INTO usuarios (nombre, rol, activo) VALUES (?, ?, 1) ON CONFLICT (nombre) DO NOTHING', [nombre.trim(), 'tecnico']);
   res.json({ success: true });
 });
-app.put('/api/usuarios/:id/toggle', (req, res) => {
-  run("UPDATE usuarios SET activo = CASE WHEN activo = 1 THEN 0 ELSE 1 END WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
+app.put('/api/usuarios/:id/toggle', async (req, res) => {
+  await run("UPDATE usuarios SET activo = CASE WHEN activo = 1 THEN 0 ELSE 1 END WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
   res.json({ success: true });
 });
-app.delete('/api/usuarios/:id', (req, res) => {
-  run("DELETE FROM usuarios WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
+app.delete('/api/usuarios/:id', async (req, res) => {
+  await run("DELETE FROM usuarios WHERE id = ? AND rol = 'tecnico'", [req.params.id]);
   res.json({ success: true });
 });
 app.get('/api/equipos-por-estacion', (req, res) => {
@@ -136,16 +215,16 @@ app.get('/api/locations', (req, res) => {
 });
 
 // --- INCIDENCIAS ---
-app.post('/api/incidencias', (req, res) => {
+app.post('/api/incidencias', async (req, res) => {
   const d = req.body;
   if (!d.estacion || !d.equipo) return res.status(400).json({ error: 'Estación y equipo requeridos' });
   const folio = d.folio || `HIT-${new Date().toISOString().replace(/[^0-9]/g,'').slice(0,14)}`;
-  run(`INSERT INTO incidencias (folio, f_reporte, h_reporte, f_llegada, h_llegada, fecha_cierre, hora_cierre, estacion, equipo, loc_id, falla_fecha_reporte, como_fue_identificado, causa_raiz, metodo_diagnostico, descripcion_correccion, tipo_pruebas, estado_equipo, acciones_preventivas, herramienta_material, refacciones, tecnico_asignado, gerente_mantenimiento, supervisor_uo_timt, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', '-6 hours'))`,
-    [folio, d.f_reporte||new Date().toISOString().split('T')[0], d.h_reporte||'', d.f_llegada||'', d.h_llegada||'', d.fecha_cierre||'', d.hora_cierre||'', d.estacion, d.equipo, d.loc_id||'', d.falla_fecha_reporte||'', d.como_fue_identificado||'', d.causa_raiz||'', d.metodo_diagnostico||'', d.descripcion_correccion||'', d.tipo_pruebas||'', d.estado_equipo||'', d.acciones_preventivas||'', d.herramienta_material||'', d.refacciones||'', d.tecnico_asignado||'', d.gerente_mantenimiento||'', d.supervisor_uo_timt||'']);
+  await run(`INSERT INTO incidencias (folio, f_reporte, h_reporte, f_llegada, h_llegada, fecha_cierre, hora_cierre, estacion, equipo, loc_id, falla_fecha_reporte, como_fue_identificado, causa_raiz, metodo_diagnostico, descripcion_correccion, tipo_pruebas, estado_equipo, acciones_preventivas, herramienta_material, refacciones, tecnico_asignado, gerente_mantenimiento, supervisor_uo_timt, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [folio, d.f_reporte||new Date().toISOString().split('T')[0], d.h_reporte||'', d.f_llegada||'', d.h_llegada||'', d.fecha_cierre||'', d.hora_cierre||'', d.estacion, d.equipo, d.loc_id||'', d.falla_fecha_reporte||'', d.como_fue_identificado||'', d.causa_raiz||'', d.metodo_diagnostico||'', d.descripcion_correccion||'', d.tipo_pruebas||'', d.estado_equipo||'', d.acciones_preventivas||'', d.herramienta_material||'', d.refacciones||'', d.tecnico_asignado||'', d.gerente_mantenimiento||'', d.supervisor_uo_timt||'', mxTimestamp()]);
   res.json({ folio });
 });
 
-app.get('/api/incidencias', (req, res) => {
+app.get('/api/incidencias', async (req, res) => {
   let sql = 'SELECT * FROM incidencias';
   const p = []; const w = [];
   if (req.query.tecnico) { w.push('tecnico_asignado = ?'); p.push(req.query.tecnico); }
@@ -154,50 +233,50 @@ app.get('/api/incidencias', (req, res) => {
   if (req.query.fecha_desde) { w.push('f_reporte >= ?'); p.push(req.query.fecha_desde); }
   if (req.query.fecha_hasta) { w.push('f_reporte <= ?'); p.push(req.query.fecha_hasta); }
   if (w.length) sql += ' WHERE ' + w.join(' AND ');
-  res.json(query(sql + ' ORDER BY created_at DESC', p));
+  res.json(await query(sql + ' ORDER BY created_at DESC', p));
 });
 
-app.get('/api/incidencias/:folio', (req, res) => {
-  const row = get('SELECT * FROM incidencias WHERE folio = ?', [req.params.folio]);
+app.get('/api/incidencias/:folio', async (req, res) => {
+  const row = await get('SELECT * FROM incidencias WHERE folio = ?', [req.params.folio]);
   if (!row) return res.status(404).json({ error: 'No encontrado' });
-  row.fotos = query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [req.params.folio]);
+  row.fotos = await query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [req.params.folio]);
   res.json(row);
 });
 
-app.put('/api/incidencias/:folio', (req, res) => {
+app.put('/api/incidencias/:folio', async (req, res) => {
   const fields = ['folio','f_reporte','h_reporte','f_llegada','h_llegada','fecha_cierre','hora_cierre','estacion','equipo','loc_id','falla_fecha_reporte','como_fue_identificado','causa_raiz','metodo_diagnostico','descripcion_correccion','tipo_pruebas','estado_equipo','acciones_preventivas','herramienta_material','refacciones','tecnico_asignado','gerente_mantenimiento','supervisor_uo_timt','estado','revisado','nota_supervision'];
   const sets = []; const p = [];
   for (const f of fields) { if (req.body[f] !== undefined) { sets.push(`${f} = ?`); p.push(req.body[f]); } }
   if (req.body.folio && req.body.folio !== req.params.folio) {
-    run(`UPDATE incidencias SET folio = ? WHERE folio = ?`, [req.body.folio, req.params.folio]);
-    run('UPDATE fotos SET folio = ? WHERE folio = ?', [req.body.folio, req.params.folio]);
+    await run(`UPDATE incidencias SET folio = ? WHERE folio = ?`, [req.body.folio, req.params.folio]);
+    await run('UPDATE fotos SET folio = ? WHERE folio = ?', [req.body.folio, req.params.folio]);
   }
   if (sets.length) {
     p.push(req.params.folio);
-    run(`UPDATE incidencias SET ${sets.join(', ')} WHERE folio = ?`, p);
+    await run(`UPDATE incidencias SET ${sets.join(', ')} WHERE folio = ?`, p);
     if (req.body.estado === 'ENVIADO') generarYEnviarPDF(req.params.folio);
   }
   res.json({ success: true });
 });
 
-app.post('/api/upload/:folio', upload.single('foto'), (req, res) => {
+app.post('/api/upload/:folio', upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió imagen' });
   const url = `/uploads/${req.file.filename}`;
-  run(`INSERT INTO fotos (folio, url_foto, tipo, fecha_toma) VALUES (?, ?, ?, datetime('now', '-6 hours'))`, [req.params.folio, url, req.body.tipo || 'general']);
+  await run(`INSERT INTO fotos (folio, url_foto, tipo, fecha_toma) VALUES (?, ?, ?, ?)`, [req.params.folio, url, req.body.tipo || 'general', mxTimestamp()]);
   res.json({ url, tipo: req.body.tipo });
 });
 
-app.delete('/api/fotos/:id', (req, res) => {
-  const f = get('SELECT * FROM fotos WHERE id = ?', [req.params.id]);
-  if (f) { const fp = path.join(__dirname, f.url_foto); if (fs.existsSync(fp)) fs.unlinkSync(fp); run('DELETE FROM fotos WHERE id = ?', [req.params.id]); }
+app.delete('/api/fotos/:id', async (req, res) => {
+  const f = await get('SELECT * FROM fotos WHERE id = ?', [req.params.id]);
+  if (f) { const fp = path.join(__dirname, f.url_foto); if (fs.existsSync(fp)) fs.unlinkSync(fp); await run('DELETE FROM fotos WHERE id = ?', [req.params.id]); }
   res.json({ success: true });
 });
 
 // --- EXCEL ---
 async function generarExcel(folio) {
-  const i = get('SELECT * FROM incidencias WHERE folio = ?', [folio]);
+  const i = await get('SELECT * FROM incidencias WHERE folio = ?', [folio]);
   if (!i) throw new Error('No encontrado');
-  const fotos = query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [folio]);
+  const fotos = await query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [folio]);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'App Hitchi';
@@ -430,12 +509,12 @@ async function generarExcel(folio) {
 }
 
 // --- PDF ---
-function generarPDF(folio) {
-  return new Promise((resolve, reject) => {
-    const i = get('SELECT * FROM incidencias WHERE folio = ?', [folio]);
-    if (!i) return reject(new Error('No encontrado'));
-    const fotos = query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [folio]);
+async function generarPDF(folio) {
+  const i = await get('SELECT * FROM incidencias WHERE folio = ?', [folio]);
+  if (!i) throw new Error('No encontrado');
+  const fotos = await query('SELECT * FROM fotos WHERE folio = ? ORDER BY tipo, id', [folio]);
 
+  return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 30, size: 'LETTER' });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
@@ -624,7 +703,7 @@ app.get('/api/incidencias/:folio/excel', async (req, res) => {
 
 app.get('/api/excel-completo', async (req, res) => {
   try {
-    const rows = query('SELECT * FROM incidencias ORDER BY created_at DESC');
+    const rows = await query('SELECT * FROM incidencias ORDER BY created_at DESC');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'App Hitchi';
     const ws = wb.addWorksheet('Todos los reportes');
@@ -665,7 +744,7 @@ app.get('/api/excel-completo', async (req, res) => {
 
 async function generarYEnviarPDF(folio) {
   try {
-    const i = get('SELECT * FROM incidencias WHERE folio = ?', [folio]); if (!i) return;
+    const i = await get('SELECT * FROM incidencias WHERE folio = ?', [folio]); if (!i) return;
     const pdf = await generarPDF(folio);
     const ue = process.env.EMAIL_USER || '', up = process.env.EMAIL_PASS || '';
     if (!ue || !up) { console.log('Email no configurado. PDF generado para', folio); return; }
@@ -680,6 +759,11 @@ app.post('/api/incidencias/:folio/enviar', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-start().then(() => {
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: err.message || 'Error interno' });
+});
+
+initDB().then(() => {
   app.listen(PORT, () => { console.log(`App Hitchi en http://localhost:${PORT}`); console.log(`Equipos: ${equipos.length} en ${estacionesUnicas.length} estaciones`); });
 }).catch(e => { console.error('Error:', e); process.exit(1); });
