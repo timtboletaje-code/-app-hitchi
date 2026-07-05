@@ -1,0 +1,65 @@
+=== FUNCIONAMIENTO DE APP HITCHI ===
+
+APP WEB: Registro de Incidencias de Mantenimiento
+URL: https://app-hitchi-production.up.railway.app
+TECNOLOGÍA: Node.js + Express + SQLite (sql.js) + PDFKit + ExcelJS
+FRONTEND: Vanilla JS (SPA), sin frameworks
+
+
+=== USUARIOS ===
+
+- Técnico: login solo con nombre (lista blanca)
+- Admin: login con nombre + contraseña (por defecto "admin123",
+  configurable con variable de entorno ADMIN_PASSWORD)
+
+El admin gestiona qué técnicos pueden entrar desde el panel
+⚙️ en el dashboard (agregar, activar/desactivar, eliminar).
+
+
+=== FLUJO COMPLETO ===
+
+1. LOGIN → Dashboard con lista de reportes
+2. Presiona "+" → Formulario nueva incidencia
+3. Completa: estación, equipo, location ID, fechas, falla,
+   corrección, acciones preventivas, responsables
+4. Guarda → Se crea el registro (borrador)
+5. Sube fotos (mín 2 antes + 2 después, máx 4 c/u)
+6. Envía reporte → Se genera PDF + Excel, se envía por correo
+   a timtboletaje@gmail.com con copia a marianozar.c@gmail.com
+7. Admin puede revisar y marcar como "Revisado"
+
+
+=== CAMPOS QUE CAPTURA ===
+
+- Folio (auto-generado o manual)
+- Fecha/Hora de Reporte, Llegada, Cierre
+- Estación, Equipo, Location ID
+- Fecha de la Falla
+- Cómo fue identificado (CCO, MAU, Recorrido Técnico, etc.)
+- Causa Raíz, Método de Diagnóstico
+- Descripción de Corrección, Tipo de Pruebas
+- Estado en que se deja el equipo
+- Acciones Preventivas, Herramienta/Material, Refacciones
+- Técnico, Gerente de Mantenimiento, Supervisor UO TIMT
+- Fotos (antes y después)
+- Nota de Supervisión (solo admin)
+
+
+=== SALIDAS ===
+
+- PDF individual por reporte (formato tipo oficio, con logo Hitachi)
+- Excel individual por reporte
+- Excel completo de todos los reportes (botón "Excel completo")
+- Correo automático con PDF adjunto al enviar
+
+
+=== DATOS MAESTROS ===
+
+- Estaciones, equipos y location IDs: archivo equipos.json
+  (editarlo manualmente y reiniciar servidor)
+- Usuarios: BD SQLite, gestionables desde panel admin
+
+
+=== REPOSITORIO ===
+
+https://github.com/timtboletaje-code/-app-hitchi

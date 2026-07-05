@@ -242,6 +242,6 @@
   {"estacion":"Observatorio","equipo":"Puerta de cortesia","loc_id":"PLC EJE 4"},
   {"estacion":"Observatorio","equipo":"Puerta de cortesia","loc_id":"PLC EJE 5"},
   {"estacion":"Observatorio","equipo":"Puerta de cortesia","loc_id":"PLC EJE 9"},
-  {"estacion":"Observatorio","equipo":"TOM","loc_id":"TOM Obs"},
-  {"estacion":"Observatorio","equipo":"PC ESTACION","loc_id":"PC ESTACION Obs"}
+  {"estacion":"Observatorio","equipo":"TOM","loc_id":"TOM"},
+  {"estacion":"Observatorio","equipo":"PC ESTACION","loc_id":"PC ESTACION"}
 ]

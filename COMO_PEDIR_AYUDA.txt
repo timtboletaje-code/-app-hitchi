@@ -1,0 +1,45 @@
+=== CÓMO PEDIRME AYUDA PARA UN NUEVO PROYECTO / APP ===
+
+Para abrir un chat nuevo y comenzar desde cero sin
+confundir información, proporcióname esto:
+
+1. QUÉ QUIERES HACER
+   - Describe el propósito de la app: ¿quién la usa? ¿para qué?
+   - Ej: "App para registrar inspecciones diarias"
+   - Ej: "App para generar reportes de calidad"
+
+2. QUÉ DATOS MANEJAS
+   - Lista de campos que necesitas capturar
+   - Si ya tienes un archivo con datos (Excel, JSON, etc.)
+     adjúntalo o descríbelo
+   - Ej: fecha, estación, equipo, técnico, observaciones, fotos
+
+3. QUÉ SALIDAS NECESITAS
+   - ¿Reportes en PDF? ¿Excel? ¿Pantalla?
+   - ¿Con qué estructura/columnas?
+   - ¿Ejemplo visual? (foto de un reporte actual sirve mucho)
+
+4. USUARIOS Y PERMISOS
+   - ¿Quién puede ver/editar/qué?
+   - ¿Login con contraseña? ¿Lista blanca como esta?
+
+5. TECNOLOGÍA
+   - ¿Servidor propio o en la nube (Railway)?
+   - ¿App web o móvil?
+   - Si ya tienes algo funcionando, comparte el código/enlace
+
+6. DISEÑO / MARCA
+   - ¿Colores, logo, nombre de la app?
+   - ¿Idioma (español, inglés)?
+
+7. DATOS DE CONTACTO / CORREO
+   - Si requiere envío de correos, ¿cuentas SMTP?
+
+
+Si no sabes qué responder en alguno, no importa,
+lo definimos sobre la marcha. Con solo el punto 1
+y 2 ya podemos arrancar.
+
+Al abrir chat nuevo, pega la información y dime:
+"Necesito una app similar a la que hicimos de
+Hitchi pero para [propósito]"
