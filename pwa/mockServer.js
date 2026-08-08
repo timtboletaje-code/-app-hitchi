@@ -835,15 +835,16 @@
   async function seed() {
     const db = await openDB();
     const users = await dbAll(db, 'usuarios');
-    if (!users.length) {
-      const defaults = [
-        { nombre: 'Técnico Demo', rol: 'tecnico', activo: 1 },
-        { nombre: 'Boletaje2026*', rol: 'tecnico', activo: 1 },
-        { nombre: 'mariano', rol: 'tecnico', activo: 1 },
-        { nombre: 'Test Tecnico', rol: 'tecnico', activo: 1 },
-        { nombre: 'Admin Test', rol: 'admin', activo: 1 },
-      ];
-      for (const u of defaults) await dbPut(db, 'usuarios', u);
+    const existing = new Set(users.map(u => u.nombre));
+    const defaults = [
+      { nombre: 'Técnico Demo', rol: 'tecnico', activo: 1 },
+      { nombre: 'Boletaje2026*', rol: 'tecnico', activo: 1 },
+      { nombre: 'mariano', rol: 'tecnico', activo: 1 },
+      { nombre: 'Test Tecnico', rol: 'tecnico', activo: 1 },
+      { nombre: 'Admin Test', rol: 'admin', activo: 1 },
+    ];
+    for (const u of defaults) {
+      if (!existing.has(u.nombre)) await dbPut(db, 'usuarios', u);
     }
   }
 
