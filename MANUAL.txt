@@ -1,0 +1,412 @@
+================================================================
+                MANUAL DE USO - APP HITCHI (PWA LOCAL)
+================================================================
+Versión: 1.0
+Fecha: 08/08/2026
+================================================================
+
+CONTENIDO
+---------
+1.  ¿Qué es esta app y cómo funciona?
+2.  Estructura de archivos
+3.  Flujo del técnico (paso a paso)
+4.  Cómo probar la app
+5.  Cómo dar de alta un técnico (procedimiento completo)
+6.  Cómo agregar estaciones, equipos o Location IDs
+7.  Cómo hacer cambios y subirlos a la web (Netlify)
+8.  Cómo agregar o cambiar logos del PDF
+9.  Datos importantes y limitaciones
+10. Solución de problemas frecuentes
+
+
+================================================================
+1. ¿QUÉ ES ESTA APP Y CÓMO FUNCIONA?
+================================================================
+
+App Hitchi es un sistema de reporte de incidencias de
+mantenimiento para estaciones. Existen DOS versiones:
+
+A) VERSIÓN WEB (servidor)  ->  USO NORMAL CUANDO ESTÉ DISPONIBLE
+   - Corre en Internet (Railway + base de datos PostgreSQL).
+   - TODOS los reportes se guardan en UNA sola base central.
+   - Cualquier dispositivo (celular, PC) ve los mismos datos.
+   - El administrador ve los reportes de todos los técnicos.
+
+B) VERSIÓN LOCAL (PWA)  ->  ESTA ES LA QUE ESTAMOS USANDO AHORA
+   - Es una página web "instalable" que funciona SOLA en el
+     navegador del celular, SIN servidor.
+   - TODO se guarda en el CELULAR del usuario (no en Internet).
+   - El PDF y el Excel se generan DENTRO del teléfono.
+   - Se usa como PLAN B mientras el servidor (Railway) esté
+     detenido.
+
+IMPORTANTE SOBRE LA VERSIÓN LOCAL:
+   - Los datos de cada técnico viven SOLO en SU teléfono.
+   - El administrador NO ve los reportes de los técnicos desde
+     su propio teléfono (porque no hay base central).
+   - Si se borran los datos del navegador, se pierde todo lo
+     guardado en ESE teléfono.
+   - Los usuarios (técnicos) se crean UNA sola vez en el código
+     y se propagan a los celulares (ver sección 5).
+
+
+================================================================
+2. ESTRUCTURA DE ARCHIVOS
+================================================================
+
+Carpeta del proyecto:  /home/mint/app-hitchi
+
+   equipos.json                 -> Lista de estaciones/equipos/loc_id
+                                    (ORIGINAL, se edita aquí)
+   actualizar-equipos.js        -> Script que convierte equipos.json
+                                    en pwa/equiposData.js
+   netlify.toml                 -> Configuración de Netlify
+                                    (indica que se publica la carpeta pwa/)
+   server.js                    -> Versión del SERVIDOR (Railway).
+                                    NO se usa en la PWA local.
+
+Carpeta PWA (lo que se publica en Internet):
+   pwa/
+     index.html                 -> Pantalla principal (login)
+     app.js                     -> Lógica de la app (botones, pantallas)
+     styles.css                 -> Estilos visuales
+     logos.js                   -> Logos del PDF (en base64)
+     equiposData.js             -> Estaciones/equipos (GENERADO por
+                                    actualizar-equipos.js, NO editar)
+     mockServer.js              -> Base de datos local + simulación
+                                    del servidor + generación de PDF/Excel
+     libs/pdfkit.js             -> Librería para generar PDF
+     libs/exceljs.min.js        -> Librería para generar Excel
+     manifest.json              -> Datos para "instalar" la app
+     sw.js                      -> Service Worker (funciona sin conexión)
+     icons/                     -> Íconos de la app
+
+
+================================================================
+3. FLUJO DEL TÉCNICO (PASO A PASO)
+================================================================
+
+1) ABRIR LA APP
+   - En el celular: entrar a https://magical-manatee-4b2307.netlify.app
+   - Para que se vea como app: menú del navegador
+     -> "Agregar a pantalla de inicio" / "Instalar app".
+
+2) INICIAR SESIÓN
+   - Escribir el nombre (ej. mariano) y presionar Entrar.
+   - El nombre debe existir en la lista de usuarios (ver sección 5).
+   - Si el nombre no está, la app dirá "Usuario no autorizado".
+
+3) PANEL PRINCIPAL (Dashboard)
+   - Muestra las incidencias del técnico (las de esa persona).
+   - Botón "+" para crear una incidencia nueva.
+
+4) CREAR UNA INCIDENCIA
+   a) Presionar el botón "+".
+   b) Seleccionar ESTACIÓN (ej. Metepec).
+   c) Seleccionar EQUIPO (ej. PAR).
+   d) Seleccionar LOCATION ID (ej. F03502).
+      - Si no aparece el Location ID, esperar unos segundos.
+   e) Llenar todos los campos del formulario
+      (fechas, horas, causa raíz, corrección, etc.).
+   f) Presionar "CREAR INCIDENCIA".
+      - Esto guarda como BORRADOR (aún no valida todo).
+
+5) AGREGAR FOTOS (obligatorio para enviar)
+   - En la pantalla de edición:
+     * Fotos ANTES: mínimo 2 y máximo 4.
+     * Fotos DESPUÉS: mínimo 2 y máximo 4.
+   - Tocar el espacio de la foto y elegir "cámara" o "galería".
+   - Las fotos se comprimen solas (se aligeran).
+
+6) ENVIAR EL REPORTE
+   - Presionar "ENVIAR REPORTE".
+   - La app valida que estén todos los campos y las fotos.
+   - Genera el PDF con todo el reporte y lo descarga.
+   - El reporte queda con estado "ENVIADO".
+   - Mandar el PDF por WhatsApp/email manualmente.
+
+7) DESCARGAR EXCEL
+   - Al ver una incidencia se puede descargar el Excel.
+   - El administrador puede descargar el Excel COMPLETO con todo.
+
+NOTA: como no hay servidor, "enviar" significa que el PDF se
+genera en el teléfono y el técnico lo comparte manualmente.
+
+
+================================================================
+4. CÓMO PROBAR LA APP
+================================================================
+
+4.1 PROBAR EN LA COMPUTADORA (rápido)
+   Abrir una terminal y escribir:
+
+      cd /home/mint/app-hitchi/pwa
+      python3 -m http.server 4000
+
+   Luego abrir en el navegador:  http://localhost:4000
+
+   Usuarios de prueba predefinidos:
+      - mariano          (técnico)
+      - Técnico Demo     (técnico)
+      - Test Tecnico     (técnico)
+      - Admin Test       (administrador, contraseña: admin123)
+      - Boletaje2026*    (técnico)
+
+4.2 PROBAR LA API (pruebas automáticas, 16 verificaciones)
+      node /tmp/opencode/test-api.js
+
+4.3 PROBAR EN EL CELULAR
+   - Con el teléfono en la misma red WiFi:
+     http://IP-de-tu-computadora:4000
+     (ej. http://192.168.1.10:4000)
+   - En la computadora, obtener la IP con: hostname -I
+   - NOTA: por http normal funciona para probar, pero el
+     Service Worker y la "instalación" requieren https.
+     Por eso para uso real se usa la URL de Netlify (https).
+
+4.4 PROBAR EL FLUJO COMPLETO AUTOMÁTICO (E2E en navegador real)
+   - Requiere Chrome instalado.
+   - Instalar temporalmente:  npm i --no-save puppeteer-core
+   - Lanzar un servidor local en el puerto 4000 (ver 4.1).
+   - Ejecutar:  node /tmp/opencode/test-e2e.js
+
+4.5 BORRAR LOS DATOS DE PRUEBA DE UN CELULAR
+   - Si quieres que la app "empiece de cero":
+     * En la computadora (Chrome):
+       F12 -> Application -> IndexedDB -> borrar la base.
+     * En el celular: Ajustes del navegador -> Datos del sitio
+       -> borrar datos de la app.
+   - Al volver a abrir, la app crea de nuevo la lista de
+     usuarios base (seed).
+
+
+================================================================
+5. CÓMO DAR DE ALTA UN TÉCNICO (PROCEDIMIENTO COMPLETO)
+================================================================
+
+En la versión local NO existe "registro" del propio técnico.
+Los usuarios se definen en el código y cada celular los copia
+al abrir la app. Para agregar un técnico nuevo:
+
+PASO 1 - Editar el archivo del seed
+   Abrir:  pwa/mockServer.js
+   Buscar la función:  seed()
+   En la lista "defaults" agregar el nombre del técnico:
+
+      { nombre: 'Pedro', rol: 'tecnico', activo: 1 },
+
+   Ejemplo de la lista completa después de agregar:
+      const defaults = [
+        { nombre: 'Técnico Demo', rol: 'tecnico', activo: 1 },
+        { nombre: 'Boletaje2026*', rol: 'tecnico', activo: 1 },
+        { nombre: 'mariano', rol: 'tecnico', activo: 1 },
+        { nombre: 'Test Tecnico', rol: 'tecnico', activo: 1 },
+        { nombre: 'Admin Test', rol: 'admin', activo: 1 },
+        { nombre: 'Pedro', rol: 'tecnico', activo: 1 },
+      ];
+
+   - rol: 'tecnico' o 'admin'.
+   - activo: 1 = habilitado, 0 = deshabilitado.
+
+PASO 2 - Subir el cambio (ver sección 7)
+
+PASO 3 - Esperar el redespliegue de Netlify (~1-2 minutos)
+
+PASO 4 - En el celular del técnico:
+   - Recargar la página de la app (tirar hacia abajo o refresh).
+   - Ya podrá iniciar sesión con su nombre.
+
+LO QUE HACE EL SEED (comportamiento nuevo, verificado):
+   - Agrega SOLO los nombres que no existen en ese celular.
+   - NO duplica usuarios.
+   - NO reactiva usuarios que el administrador desactivó.
+   - NO borra los reportes ni las fotos del celular.
+
+IMPORTANTE:
+   - Cada celular que YA abrió la app recibe el técnico nuevo en
+     el siguiente refresh. No hay que borrar nada.
+   - El técnico NUEVO no necesita hacer nada especial: solo
+     abrir la app y escribir su nombre.
+
+
+================================================================
+6. CÓMO AGREGAR ESTACIONES, EQUIPOS O LOCATION IDS
+================================================================
+
+La lista de estaciones/equipos/location IDs está en:
+   equipos.json  (archivo ORIGINAL, se edita aquí)
+
+PASO 1 - Editar equipos.json
+   Agregar una fila con el formato:
+      {"estacion":"Metepec","equipo":"PAR","loc_id":"F03502"}
+
+   Ejemplo si falta un Location ID nuevo:
+      { ... las filas existentes ... ,
+        {"estacion":"Metepec","equipo":"PAR","loc_id":"F03999"} }
+
+PASO 2 - Regenerar el archivo de la PWA
+   En la terminal:
+      cd /home/mint/app-hitchi
+      node actualizar-equipos.js
+
+   Esto crea/actualiza:  pwa/equiposData.js
+   El script valida que todas las filas tengan estación, equipo
+   y loc_id, y avisa si hay filas duplicadas.
+
+PASO 3 - Subir el cambio (ver sección 7)
+
+PASO 4 - En el celular, recargar la app.
+   - Si el Service Worker guardó la versión vieja, hacer un
+     recargado forzado (en Chrome: menú -> "Recargar" manteniendo
+     el botón, o borrar datos del sitio).
+
+NO EDITAR A MANO pwa/equiposData.js: siempre regenerarlo con
+el script para que coincida con equipos.json.
+
+
+================================================================
+7. CÓMO HACER CAMBIOS Y SUBIRLOS A LA WEB (NETLIFY)
+================================================================
+
+El flujo completo de trabajo es:
+
+   1) Editar los archivos en la computadora.
+   2) Probar localmente (sección 4).
+   3) Subir con git a GitHub.
+   4) Netlify detecta el push y redespliega solo (~1-2 min).
+   5) Recargar la app en el celular para ver los cambios.
+
+PASO A PASO:
+
+   cd /home/mint/app-hitchi
+
+   git add -A
+   git commit -m "Descripción del cambio"        (ej. "Alta técnico Pedro")
+   git push origin main
+
+   Esperar 1-2 minutos y entrar a:
+      https://magical-manatee-4b2307.netlify.app
+
+NOTAS:
+   - El cambio NO es instantáneo: Netlify tarda ~1-2 min en
+     construir y publicar.
+   - El celular puede seguir mostrando la versión vieja hasta
+     recargar la página.
+   - Si un cambio rompe algo en el sitio, se puede restaurar el
+     deploy anterior desde Netlify -> Deploys -> "Publish
+     deploy" de una versión vieja.
+   - El archivo netlify.toml ya está configurado para publicar
+     SOLO la carpeta pwa/. No hay que tocar servidores.
+
+PROBAR ANTES DE SUBIR (recomendado):
+   - Siempre probar local con http://localhost:4000 (sección 4)
+     antes de hacer git push.
+
+
+================================================================
+8. CÓMO AGREGAR O CAMBIAR LOS LOGOS DEL PDF
+================================================================
+
+Los logos que salen en el PDF están embebidos como texto base64
+en el archivo:
+   pwa/logos.js
+
+PASO 1 - Convertir la imagen a base64.
+   En la terminal (dentro de /home/mint/app-hitchi):
+
+      node -e "
+        const fs=require('fs');
+        const img=fs.readFileSync('TU_IMAGEN.png');
+        console.log('data:image/png;base64,'+img.toString('base64'));
+      "
+
+PASO 2 - Reemplazar el valor en pwa/logos.js
+   - LOGO_IZQ = el logo izquierdo del PDF.
+   - LOGO_DER = el logo derecho del PDF.
+
+PASO 3 - Subir el cambio (sección 7) y recargar la app.
+
+NOTA: el PDF nuevo se genera con los logos nuevos. Los PDF ya
+descargados no cambian.
+
+
+================================================================
+9. DATOS IMPORTANTES Y LIMITACIONES
+================================================================
+
+- USUARIOS BASE en cada celular (creados al abrir la app):
+    Técnico Demo / Boletaje2026* / mariano / Test Tecnico
+    (técnicos) y Admin Test (admin, contraseña admin123).
+
+- CONTRASEÑA DEL ADMINISTRADOR LOCAL:  admin123
+  (Está definida en pwa/mockServer.js -> ADMIN_PASS.
+   Si se cambia, actualizar en TODOS los celulares nuevos, porque
+   cada celular toma la versión del código que le toque.)
+
+- LOS DATOS SON LOCALES POR CELULAR:
+  Cada teléfono guarda sus propios reportes. No hay central.
+
+- LÍMITES DE FOTOS por reporte:
+  2 a 4 fotos ANTES y 2 a 4 fotos DESPUÉS.
+
+- IDENTIDAD DEL PDF/EXCEL:
+  El PDF local es idéntico al del servidor (misma librería y
+  código). El Excel es byte-idéntico.
+
+- ESTADOS DE UN REPORTE:
+  BORRADOR = creado pero no enviado.
+  ENVIADO  = validado y con PDF generado.
+
+- ENVIAR = DESCARGAR PDF:
+  Sin servidor no hay correo automático; el técnico comparte el
+  PDF manualmente.
+
+- VUELTA AL SERVIDOR (Railway):
+  Cuando se reactive el pago de Railway, la versión web central
+  volverá a estar disponible y los reportes se guardarán en la
+  base de datos compartida. Los reportes locales de los
+  teléfonos NO se suben solos al servidor.
+
+
+================================================================
+10. SOLUCIÓN DE PROBLEMAS FRECUENTES
+================================================================
+
+PROBLEMA: La página dice "Page not found" (404).
+  -> El deploy de Netlify no está publicando la carpeta pwa/.
+     Verificar que netlify.toml tenga: publish = "pwa"
+     y que el último commit incluya la carpeta pwa/.
+
+PROBLEMA: Al iniciar sesión dice "Usuario no autorizado".
+  -> El nombre no existe en la lista de usuarios del seed.
+     Revisar sección 5 (dar de alta el técnico).
+
+PROBLEMA: "Selecciona un Location ID".
+  -> No se eligió estación/equipo/loc correctamente, o los
+     datos no llegaron. Reintentar seleccionando los tres.
+
+PROBLEMA: "Se requieren mínimo 2 fotos ANTES/DESPUÉS".
+  -> Faltan fotos. Agregar mínimo 2 de cada tipo.
+
+PROBLEMA: En el celular se ve la versión vieja.
+  -> Recargar la página. Si sigue, borrar los datos del sitio
+     del navegador (sección 4.5) o recargar forzado.
+
+PROBLEMA: El técnico nuevo no aparece en el celular.
+  -> Verificar que el push se hizo (git push) y que Netlify
+     publicó el commit nuevo (~1-2 min). Luego recargar la app.
+
+PROBLEMA: Se perdieron los reportes al borrar el navegador.
+  -> Esperado: los datos locales viven en el celular. Es la
+     limitación del plan B. La versión con servidor central
+     evita esto.
+
+PROBLEMA: El servidor local (python) no abre en el celular.
+  -> Verificar que el celular y la computadora estén en la
+     misma red WiFi y usar la IP correcta (hostname -I).
+     Probar desde el celular en el navegador con http://IP:4000.
+
+
+================================================================
+FIN DEL MANUAL
+================================================================
